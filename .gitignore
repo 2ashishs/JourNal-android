@@ -1,6 +1,7 @@
 # Gradle files
 .gradle/
 build/
+.navigation/
 
 # Local configuration file (sdk path, etc)
 local.properties
@@ -13,11 +14,15 @@ captures/
 .externalNativeBuild/
 .cxx/
 *.aab
+*.aar
 *.apk
+*.class
 output-metadata.json
 
 # IntelliJ
 *.iml
+*.ipr
+*.iws
 .idea/
 misc.xml
 deploymentTargetDropDown.xml
@@ -32,3 +37,18 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# --- ROOM DATABASE / LOCAL FILES SAFETIES ---
+# Exclude raw local SQLite databases, journals, and shm files generated during testing
+*.db
+*.db-shm
+*.db-wal
+journal_database*
+
+# Exclude locally captured camera testing images
+/app/src/main/assets/
+src/main/assets/
