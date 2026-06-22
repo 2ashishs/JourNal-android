@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path
+        name="journal_cache_images"
+        path="." />
+    <files-path
+        name="journal_permanent_images"
+        path="." />
+</paths>
