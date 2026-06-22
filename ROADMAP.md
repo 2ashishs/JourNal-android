@@ -2,8 +2,6 @@
 
 ## 🛠️ Infrastructure & Aesthetics (New additions)
 
-- 📦 GitHub Repository Setup: Initializing git, creating a clean .gitignore (filtering out Room's local build artifacts and Android studio caches), and structuring a detailed README.md so your architecture is clear.
-
 - 🎨 Material 3 Color System: Transitioning our hardcoded colors into a dynamic Material 3 Theme utilizing ColorScheme (supporting seamless Light and Dark mode transitions without breaking text contrast).
 
 - ✨ Personalized Splash Screen & Brand Identity: Implementing the modern Android SplashScreen API (handling the cold-start window smoothly on Android 12+) and designing a cohesive visual landing identity.
