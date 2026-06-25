@@ -10,7 +10,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -52,6 +50,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -93,10 +92,19 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
         viewModel.moveEntry(from, to)
     }
 
-    val context = LocalContext.current // Grab the Android Context for Intent launching
+    val context = LocalContext.current
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("JourNaL") }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("JourNaL", fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background // Soft pastel foundation background tint
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -126,9 +134,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Using itemsIndexed lets us bind animations to stable physical layout index slots
                 itemsIndexed(entries, key = { _, entry -> entry.id }) { index, entry ->
-                    // FIXED: Compare the static item index directly with our tracking state pointer
                     val isCurrentDraggedItem = index == dragDropState.currentIndexOfDraggedItem
 
                     Box(
@@ -150,11 +156,11 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                 }
             }
 
-            // Standard Bottom Central "+" Placement Trigger Button
             FloatingActionButton(
                 onClick = { isCreateSheetOpen = true },
                 shape = RoundedCornerShape(50),
                 containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 24.dp)
@@ -166,6 +172,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             }
         }
     }
+
 
     if (isCreateSheetOpen) {
         CreateEntryBottomSheet(
@@ -179,7 +186,6 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                 isCreateSheetOpen = false
             },
             onDismiss = {
-                viewModel.clearDraft() // Reset state cleanup on dismiss
                 isCreateSheetOpen = false
             }
         )
@@ -200,41 +206,24 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             },
             onShareClick = {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
-
                     val shareBody = "*${entry.title}*\n\n${entry.details}"
-
-                    // EXTRA_SUBJECT handles the email header line gracefully
                     putExtra(Intent.EXTRA_SUBJECT, entry.title)
 
                     if (entry.photoPath != null) {
-                        // --- TEXT + IMAGE SHARING FLOW ---
-                        type = "image/*" // Tells Android the primary attachment payload is an image
-
+                        type = "image/*"
                         putExtra(Intent.EXTRA_TEXT, shareBody)
-
-                        // Convert the private file path string back into a file handle
                         val imageFile = File(entry.photoPath)
                         val authority = "${context.packageName}.fileprovider"
-
-                        // Convert to secure content:// URI via FileProvider
                         val secureImageUri =
                             FileProvider.getUriForFile(context, authority, imageFile)
-
-                        // Attach the secure media stream path hook
                         putExtra(Intent.EXTRA_STREAM, secureImageUri)
-
-                        // CRITICAL SECURITY FLAG: Explicitly grants read permissions to the receiving app
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     } else {
-                        // --- TEXT-ONLY FALLBACK FLOW ---
                         type = "text/plain"
                         putExtra(Intent.EXTRA_TEXT, shareBody)
                     }
                 }
-
-                // Wrap in a system layout chooser container
-                val chooserIntent =
-                    Intent.createChooser(shareIntent, "Share entry via")
+                val chooserIntent = Intent.createChooser(shareIntent, "Share entry via")
                 context.startActivity(chooserIntent)
             }
         )
@@ -253,12 +242,19 @@ fun JournalRowItem(
             .height(IntrinsicSize.Min)
             .border(
                 width = 1.dp,
-                color = Color.LightGray,
-                shape = RoundedCornerShape(8.dp)
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(12.dp)
             )
             .clickable { onClick() },
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = JournalColors.DefaultSurface)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 4.dp,
+            pressedElevation = 2.dp,
+            draggedElevation = 8.dp
+        )
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -268,7 +264,7 @@ fun JournalRowItem(
             Text(
                 text = entry.title.ifBlank { "Untitled Entry" },
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF1C1C1A),
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .weight(1f)
                     .padding(24.dp)
@@ -313,7 +309,10 @@ fun CreateEntryBottomSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -339,7 +338,6 @@ fun CreateEntryBottomSheet(
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
             )
 
-            // Color Selection Row (Including the Clear Option)
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -349,16 +347,15 @@ fun CreateEntryBottomSheet(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(Color.White)
+                        .background(MaterialTheme.colorScheme.surface)
                         .border(
                             width = if (draftState.selectedHexColor == null) 2.dp else 1.dp,
-                            color = if (draftState.selectedHexColor == null) MaterialTheme.colorScheme.primary else Color.LightGray,
+                            color = if (draftState.selectedHexColor == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                             shape = CircleShape
                         )
                         .clickable { onColorSelect(null) },
                     contentAlignment = Alignment.Center
                 ) {
-                    // Draws a clean diagonal "No" slash indicator line
                     Canvas(modifier = Modifier.size(24.dp)) {
                         drawLine(
                             color = Color.Red,
@@ -386,12 +383,11 @@ fun CreateEntryBottomSheet(
                 }
             }
 
-            // Square Thumbnail Preview Layout Container Block
             draftState.capturedPhotoPath?.let { path ->
                 Image(
                     painter = rememberAsyncImagePainter(File(path)),
                     contentDescription = "Captured thumbnail",
-                    contentScale = ContentScale.Crop, // Crops target visually inside layout boundaries
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(72.dp)
                         .clip(RoundedCornerShape(8.dp))
@@ -439,18 +435,14 @@ fun DetailEntryBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
-        // Main container that handles safe system navigation spacing at the bottom
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
         ) {
-
-            // ==========================================
-            // ANCHORED ZONE (Always visible at the top)
-            // ==========================================
+            // ANCHORED ZONE (Title & Dynamic Divider)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -460,47 +452,35 @@ fun DetailEntryBottomSheet(
                 Text(
                     text = entry.title,
                     style = MaterialTheme.typography.headlineSmall,
-                    color = Color.Black
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 HorizontalDivider(
                     thickness = DividerDefaults.Thickness,
-                    color = DividerDefaults.color
+                    color = MaterialTheme.colorScheme.surfaceVariant
                 )
             }
 
-            // ==========================================
-            // SCROLLABLE ZONE (Only Details & Photo scroll)
-            // ==========================================
+            // SCROLLABLE ZONE (Details & Photo)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(
-                        1f,
-                        fill = false
-                    ) // Shrinks to fit short content, caps at max screen height
+                    .weight(1f, fill = false)
                     .verticalScroll(rememberScrollState())
-                    .padding(
-                        start = 24.dp,
-                        end = 24.dp,
-                        top = 8.dp,
-                        bottom = 8.dp
-                    ), // Tighter vertical gaps
+                    .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-
                 Text(
                     text = entry.details,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color.DarkGray
+                    color = JournalColors.SecondaryMutedText
                 )
 
-                // Photo Layout: Preserves aspect ratio completely without cropping details
                 entry.photoPath?.let { path ->
                     Image(
                         painter = rememberAsyncImagePainter(File(path)),
                         contentDescription = entry.title,
-                        contentScale = ContentScale.FillWidth, // Preserves every pixel detail
+                        contentScale = ContentScale.FillWidth,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
@@ -508,19 +488,18 @@ fun DetailEntryBottomSheet(
                 }
             }
 
-            // Divider separating content from action target zone
-            HorizontalDivider(thickness = 1.dp, color = Color.LightGray)
+            HorizontalDivider(
+                thickness = DividerDefaults.Thickness,
+                color = MaterialTheme.colorScheme.surfaceVariant
+            )
 
-            // ==========================================
-            // FIXED ACTION ZONE (Low-profile, uncompressed)
-            // ==========================================
+            // FIXED BOTTOM ACTION ZONE
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp), // Reduced from 56.dp+ to keep it low-profile and tight
+                    .height(48.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left Target Box: Delete Action
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -536,7 +515,6 @@ fun DetailEntryBottomSheet(
                     }
                 }
 
-                // Center Target Box: Share Action
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -547,12 +525,11 @@ fun DetailEntryBottomSheet(
                         Icon(
                             painter = painterResource(R.drawable.ic_share),
                             contentDescription = "Share",
-                            tint = Color.DarkGray
+                            tint = JournalColors.SecondaryMutedText
                         )
                     }
                 }
 
-                // Right Target Box: Edit Action (Ergonomic thumb placement)
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -563,7 +540,7 @@ fun DetailEntryBottomSheet(
                         Icon(
                             painter = painterResource(R.drawable.ic_edit),
                             contentDescription = "Edit",
-                            tint = Color.DarkGray
+                            tint = JournalColors.SecondaryMutedText
                         )
                     }
                 }
