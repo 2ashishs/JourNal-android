@@ -72,11 +72,15 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import ash.app.journal.R
+import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.utils.DragDropState
 import coil3.compose.rememberAsyncImagePainter
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -209,10 +213,10 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                     val shareBody = "*${entry.title}*\n\n${entry.details}"
                     putExtra(Intent.EXTRA_SUBJECT, entry.title)
 
-                    if (entry.photoPath != null) {
+                    if (entry.mediaPath != null) {
                         type = "image/*"
                         putExtra(Intent.EXTRA_TEXT, shareBody)
-                        val imageFile = File(entry.photoPath)
+                        val imageFile = File(entry.mediaPath)
                         val authority = "${context.packageName}.fileprovider"
                         val secureImageUri =
                             FileProvider.getUriForFile(context, authority, imageFile)
@@ -236,6 +240,13 @@ fun JournalRowItem(
     entry: JournalEntry,
     onClick: () -> Unit,
 ) {
+    val prefixIconRes = when (entry.mediaType) {
+        EntryMediaType.PHOTO -> R.drawable.ic_media_photo    // Replace with your drawable resource names
+        EntryMediaType.AUDIO -> R.drawable.ic_media_audio
+        EntryMediaType.VIDEO -> R.drawable.ic_media_video
+        EntryMediaType.TEXT -> R.drawable.ic_media_text
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -261,6 +272,15 @@ fun JournalRowItem(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(
+                painter = painterResource(prefixIconRes),
+                contentDescription = "Content Type Indicator",
+                tint = if (entry.hexColor != null) JournalColors.fromHex(entry.hexColor) else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .padding(start = 16.dp)
+                    .size(24.dp)
+            )
+
             Text(
                 text = entry.title.ifBlank { "Untitled Entry" },
                 fontWeight = FontWeight.SemiBold,
@@ -325,7 +345,7 @@ fun CreateEntryBottomSheet(
                 onValueChange = onTitleChange,
                 label = { Text("Title") },
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words)
             )
 
             OutlinedTextField(
@@ -383,7 +403,7 @@ fun CreateEntryBottomSheet(
                 }
             }
 
-            draftState.capturedPhotoPath?.let { path ->
+            draftState.capturedMediaPath?.let { path ->
                 Image(
                     painter = rememberAsyncImagePainter(File(path)),
                     contentDescription = "Captured thumbnail",
@@ -409,7 +429,7 @@ fun CreateEntryBottomSheet(
                         cameraLauncher.launch(uri)
                     }
                 ) {
-                    Text(if (draftState.capturedPhotoPath != null) "Retake Photo" else "Photo")
+                    Text(if (draftState.capturedMediaPath != null) "Retake Photo" else "Photo")
                 }
 
                 Button(
@@ -476,7 +496,7 @@ fun DetailEntryBottomSheet(
                     color = JournalColors.SecondaryMutedText
                 )
 
-                entry.photoPath?.let { path ->
+                entry.mediaPath?.let { path ->
                     Image(
                         painter = rememberAsyncImagePainter(File(path)),
                         contentDescription = entry.title,
@@ -558,4 +578,13 @@ fun rememberDragDropState(
     return remember(lazyListState) {
         DragDropState(lazyListState, currentOnMove)
     }
+}
+
+/**
+ * Converts @param:timestamp to user readable date
+ * Note: not using it at the moment
+ */
+fun formatJournalDate(timestamp: Long): String {
+    val formatter = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
+    return formatter.format(Date(timestamp))
 }

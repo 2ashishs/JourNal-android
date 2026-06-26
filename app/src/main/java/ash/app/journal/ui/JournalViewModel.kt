@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.data.JournalRepository
+import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,7 +45,12 @@ class JournalViewModel(
     }
 
     fun onPhotoCaptured(path: String?) {
-        _draftState.update { it.copy(capturedPhotoPath = path) }
+        _draftState.update { currentDraft ->
+            currentDraft.copy(
+                capturedMediaPath = path,
+                // Automatically flip the media type enum state when an attachment is added
+                capturedMediaType = if (path != null) EntryMediaType.PHOTO else EntryMediaType.TEXT
+            ) }
     }
 
     // --- Database Actions ---
@@ -71,7 +77,9 @@ class JournalViewModel(
                     title = currentDraft.title,
                     details = currentDraft.details,
                     hexColor = currentDraft.selectedHexColor,
-                    photoPath = currentDraft.capturedPhotoPath,
+                    mediaPath = currentDraft.capturedMediaPath,
+                    mediaType = currentDraft.capturedMediaType,
+                    timestamp = System.currentTimeMillis(),
                     orderIndex = currentOrderIndex
                 )
                 repository.insertEntry(updatedEntry)
@@ -81,7 +89,9 @@ class JournalViewModel(
                     title = currentDraft.title,
                     details = currentDraft.details,
                     hexColor = currentDraft.selectedHexColor,
-                    photoPath = currentDraft.capturedPhotoPath,
+                    mediaPath = currentDraft.capturedMediaPath,
+                    mediaType = currentDraft.capturedMediaType,
+                    timestamp = System.currentTimeMillis(),
                     orderIndex = journalEntries.value.size
                 )
                 repository.insertEntry(newEntry)
@@ -135,7 +145,8 @@ class JournalViewModel(
                 title = entry.title,
                 details = entry.details,
                 selectedHexColor = entry.hexColor,
-                capturedPhotoPath = entry.photoPath
+                capturedMediaPath = entry.mediaPath,
+                capturedMediaType = entry.mediaType,
             )
         }
     }
