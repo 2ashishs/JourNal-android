@@ -2,10 +2,10 @@ package ash.app.journal.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.data.JournalRepository
 import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
+import ash.app.journal.ui.models.JournalEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class JournalViewModel(
     private val repository: JournalRepository
@@ -44,13 +47,32 @@ class JournalViewModel(
         _draftState.update { it.copy(selectedHexColor = hexColor) }
     }
 
-    fun onPhotoCaptured(path: String?) {
+    fun onMediaCaptured(path: String?, type: EntryMediaType) {
         _draftState.update { currentDraft ->
+            val autoTitle = if (path != null) {
+                when (type) {
+                    EntryMediaType.PHOTO -> "Photo on ${formatJournalDate(System.currentTimeMillis())}"
+                    EntryMediaType.VIDEO -> "Video on ${formatJournalDate(System.currentTimeMillis())}"
+                    EntryMediaType.AUDIO -> "Audio on ${formatJournalDate(System.currentTimeMillis())}"
+                    else -> ""
+                }
+            } else {
+                ""
+            }
             currentDraft.copy(
                 capturedMediaPath = path,
-                // Automatically flip the media type enum state when an attachment is added
-                capturedMediaType = if (path != null) EntryMediaType.PHOTO else EntryMediaType.TEXT
-            ) }
+                capturedMediaType = if (path != null) type else EntryMediaType.TEXT,
+                autoTitlePlaceholder = autoTitle
+            )
+        }
+    }
+
+    /**
+     * Converts @param:timestamp to user readable date
+     */
+    fun formatJournalDate(timestamp: Long): String {
+        val formatter = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
+        return formatter.format(Date(timestamp))
     }
 
     // --- Database Actions ---
@@ -60,8 +82,8 @@ class JournalViewModel(
         val currentDraft = _draftState.value
 
         // CRITICAL VALIDATION: Prevent saving if the title is completely empty or whitespace
-        if (currentDraft.title.isBlank()) {
-            // In a production app, you could emit a UI "Toast" or "Snackbar" error state here
+        val finalTitle = currentDraft.title.ifBlank { currentDraft.autoTitlePlaceholder }
+        if (finalTitle.isBlank()) {
             return
         }
 
@@ -69,12 +91,13 @@ class JournalViewModel(
             if (currentDraft.editingEntryId != null) {
                 // --- EDIT MODE: Fetch the existing entry configuration to preserve order index ---
                 val existingList = journalEntries.value
-                val existingEntry = existingList.firstOrNull { it.id == currentDraft.editingEntryId }
+                val existingEntry =
+                    existingList.firstOrNull { it.id == currentDraft.editingEntryId }
                 val currentOrderIndex = existingEntry?.orderIndex ?: 0
 
                 val updatedEntry = JournalEntry(
                     id = currentDraft.editingEntryId, // Matching ID triggers Room's REPLACE / Update mechanism
-                    title = currentDraft.title,
+                    title = finalTitle,
                     details = currentDraft.details,
                     hexColor = currentDraft.selectedHexColor,
                     mediaPath = currentDraft.capturedMediaPath,
@@ -86,7 +109,7 @@ class JournalViewModel(
             } else {
                 // --- NEW ENTRY MODE ---
                 val newEntry = JournalEntry(
-                    title = currentDraft.title,
+                    title = finalTitle,
                     details = currentDraft.details,
                     hexColor = currentDraft.selectedHexColor,
                     mediaPath = currentDraft.capturedMediaPath,

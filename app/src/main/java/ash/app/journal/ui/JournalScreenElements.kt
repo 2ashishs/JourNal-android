@@ -2,6 +2,7 @@ package ash.app.journal.ui
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -11,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +54,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,7 +73,15 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import ash.app.journal.R
 import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
@@ -78,9 +89,6 @@ import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.utils.DragDropState
 import coil3.compose.rememberAsyncImagePainter
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -184,7 +192,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             onTitleChange = viewModel::onTitleChanged,
             onDetailsChange = viewModel::onDetailsChanged,
             onColorSelect = viewModel::onColorSelected,
-            onPhotoCapture = viewModel::onPhotoCaptured,
+            onMediaCapture = viewModel::onMediaCaptured,
             onSave = {
                 viewModel.saveCurrentEntry()
                 isCreateSheetOpen = false
@@ -307,6 +315,11 @@ private fun createTempImageFile(context: Context): File {
     return File.createTempFile("captured_photo_", ".jpg", directory)
 }
 
+private fun createTempVideoFile(context: Context): File {
+    val directory = File(context.cacheDir, "journal_videos").apply { mkdirs() }
+    return File.createTempFile("captured_video_", ".mp4", directory)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateEntryBottomSheet(
@@ -314,19 +327,35 @@ fun CreateEntryBottomSheet(
     onTitleChange: (String) -> Unit,
     onDetailsChange: (String) -> Unit,
     onColorSelect: (String?) -> Unit,
-    onPhotoCapture: (String?) -> Unit,
+    onMediaCapture: (String?, EntryMediaType) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     var tempPhotoPath by remember { mutableStateOf<String?>(null) }
+    var tempVideoPath by remember { mutableStateOf<String?>(null) }
+    var tempVideoUri by remember { mutableStateOf<Uri?>(null) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && tempPhotoPath != null) {
-            onPhotoCapture(tempPhotoPath)
+            onMediaCapture(tempPhotoPath, EntryMediaType.PHOTO)
         }
+    }
+
+    val videoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CaptureVideo()
+    ) { success ->
+        if (success && tempVideoUri != null) {
+            onMediaCapture(tempVideoPath, EntryMediaType.VIDEO)
+        }
+    }
+
+    val dynamicAutoTitleLabel = if (draftState.autoTitlePlaceholder.isNotBlank()) {
+        draftState.autoTitlePlaceholder
+    } else {
+        "Title"
     }
 
     ModalBottomSheet(
@@ -343,7 +372,7 @@ fun CreateEntryBottomSheet(
             OutlinedTextField(
                 value = draftState.title,
                 onValueChange = onTitleChange,
-                label = { Text("Title") },
+                label = { Text(dynamicAutoTitleLabel) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words)
             )
@@ -404,42 +433,135 @@ fun CreateEntryBottomSheet(
             }
 
             draftState.capturedMediaPath?.let { path ->
-                Image(
-                    painter = rememberAsyncImagePainter(File(path)),
-                    contentDescription = "Captured thumbnail",
-                    contentScale = ContentScale.Crop,
+                Box(
                     modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                )
+                        .padding(top = 8.dp)
+                        .size(80.dp) // Slightly larger to comfortably accommodate the clear button
+                ) {
+                    Image(
+                        painter = rememberAsyncImagePainter(File(path)),
+                        contentDescription = "Captured media preview",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(72.dp)
+                            .align(Alignment.BottomStart)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable {
+                                // Quick UX Win: Clicking the thumbnail itself can trigger a retake context
+                            }
+                    )
+
+                    val overlayIconRes = when (draftState.capturedMediaType) {
+                        EntryMediaType.PHOTO -> R.drawable.ic_media_photo
+                        EntryMediaType.VIDEO -> R.drawable.ic_media_video
+                        EntryMediaType.AUDIO -> R.drawable.ic_media_audio
+                        EntryMediaType.TEXT -> null
+                    }
+
+                    overlayIconRes?.let { iconRes ->
+                        Box(
+                            modifier = Modifier
+                                .padding(bottom = 4.dp, end = 12.dp)
+                                .size(18.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                .align(Alignment.BottomEnd),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(iconRes),
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(10.dp)
+                            )
+                        }
+                    }
+                    // Clear/Remove Media Cross Button ---
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(MaterialTheme.colorScheme.error, CircleShape)
+                            .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                            .align(Alignment.TopEnd) // This will resolve the scope mismatch cleanly here
+                            .clickable {
+                                // Invoke a callback to pass null up to the ViewModel to clear out the media file references
+                                onMediaCapture(null, EntryMediaType.TEXT)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_close), // Make sure you have a close/clear vector icon
+                            contentDescription = "Remove Media",
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
             }
 
+            // A single, cohesive row container handling all bottom sheet controls
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
-                    onClick = {
-                        val file = createTempImageFile(context)
-                        val authority = "${context.packageName}.fileprovider"
-                        val uri = FileProvider.getUriForFile(context, authority, file)
-
-                        tempPhotoPath = file.absolutePath
-                        cameraLauncher.launch(uri)
-                    }
+                // Left Segment: Packs all mutually exclusive media choice chips cleanly together
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f) // Takes up remaining left-side real estate dynamically
                 ) {
-                    Text(if (draftState.capturedMediaPath != null) "Retake Photo" else "Photo")
+                    if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.PHOTO) {
+                        Button(
+                            onClick = {
+                                val file = createTempImageFile(context)
+                                val authority = "${context.packageName}.fileprovider"
+                                val uri = FileProvider.getUriForFile(context, authority, file)
+                                tempPhotoPath = file.absolutePath
+                                cameraLauncher.launch(uri)
+                            }
+                        ) {
+                            // Since we added the precise "X" close button above, we can simplify this text to just "Photo"
+                            Text("Photo")
+                        }
+                    }
+
+                    if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.VIDEO) {
+                        Button(
+                            onClick = {
+                                val file = createTempVideoFile(context)
+                                val authority = "${context.packageName}.fileprovider"
+                                tempVideoPath = file.absolutePath
+                                val uri = FileProvider.getUriForFile(context, authority, file)
+                                tempVideoUri = uri
+                                videoLauncher.launch(uri)
+                            }
+                        ) {
+                            Text("Video")
+                        }
+                    }
+
+                    if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.AUDIO) {
+                        Button(
+                            onClick = { /* Future Audio note recording trigger pipeline hooks */ }
+                        ) {
+                            Text("Audio")
+                        }
+                    }
                 }
 
+                // Right Segment: Positioned perfectly on the same line between the center and right edge
                 Button(
                     onClick = onSave,
-                    enabled = draftState.title.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    enabled = draftState.title.isNotBlank() || draftState.autoTitlePlaceholder.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.padding(start = 16.dp)
                 ) {
                     Text("Save")
                 }
             }
+
         }
     }
 }
@@ -497,14 +619,49 @@ fun DetailEntryBottomSheet(
                 )
 
                 entry.mediaPath?.let { path ->
-                    Image(
-                        painter = rememberAsyncImagePainter(File(path)),
-                        contentDescription = entry.title,
-                        contentScale = ContentScale.FillWidth,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                    )
+                    if (entry.mediaType == EntryMediaType.PHOTO) {
+                        var isImageFullscreen by remember { mutableStateOf(false) }
+
+                        Image(
+                            painter = rememberAsyncImagePainter(File(path)),
+                            contentDescription = entry.title,
+                            contentScale = ContentScale.FillWidth,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .pointerInput(Unit) {
+                                    detectTapGestures(onDoubleTap = { isImageFullscreen = true })
+                                }
+                        )
+
+                        if (isImageFullscreen) {
+                            Dialog(
+                                onDismissRequest = { isImageFullscreen = false },
+                                properties = DialogProperties(usePlatformDefaultWidth = false)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black)
+                                        .pointerInput(Unit) {
+                                            detectTapGestures(onDoubleTap = {
+                                                isImageFullscreen = false
+                                            })
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Image(
+                                        painter = rememberAsyncImagePainter(File(path)),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Fit, // Fits image inside boundaries without clipping details
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        }
+                    } else if (entry.mediaType == EntryMediaType.VIDEO) {
+                        LoopingVideoPlayer(entry.mediaPath)
+                    }
                 }
             }
 
@@ -569,6 +726,96 @@ fun DetailEntryBottomSheet(
     }
 }
 
+@androidx.annotation.OptIn(UnstableApi::class)
+@Composable
+fun LoopingVideoPlayer(videoPath: String) {
+    val context = LocalContext.current
+    var isFullscreen by remember { mutableStateOf(false) }
+
+    // Master unified ExoPlayer instance tied to this lifecycle
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(File(videoPath).toURI().toString()))
+            repeatMode = Player.REPEAT_MODE_ALL
+            playWhenReady = true
+            prepare()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { exoPlayer.release() }
+    }
+
+    // Inline standard layout container player
+    AndroidView(
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                useController = false
+            }
+        },
+        update = { playerView ->
+            // --- THE FIXED SURFACE HAND-OFF ---
+            if (isFullscreen) {
+                // If full-screen is active, release the player from this view
+                // so the dialog's PlayerView can claim the surface safely
+                playerView.player = null
+            } else {
+                // When coming back, explicitly re-attach the engine to force a surface redraw
+                if (playerView.player != exoPlayer) {
+                    playerView.player = null // Clear old texture cache reference
+                    playerView.player = exoPlayer
+                }
+            }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(360.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .pointerInput(isFullscreen) {
+                detectTapGestures(
+                    onTap = { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() },
+                    onDoubleTap = { isFullscreen = true }
+                )
+            }
+    )
+
+    // Fullscreen Overlay Dialog
+    if (isFullscreen) {
+        Dialog(
+            onDismissRequest = { isFullscreen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() },
+                            onDoubleTap = { isFullscreen = false }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            useController = false
+                        }
+                    },
+                    update = { fullscreenPlayerView ->
+                        // Claim the player engine for the fullscreen view layer
+                        if (fullscreenPlayerView.player != exoPlayer) {
+                            fullscreenPlayerView.player = exoPlayer
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun rememberDragDropState(
     lazyListState: LazyListState,
@@ -578,13 +825,4 @@ fun rememberDragDropState(
     return remember(lazyListState) {
         DragDropState(lazyListState, currentOnMove)
     }
-}
-
-/**
- * Converts @param:timestamp to user readable date
- * Note: not using it at the moment
- */
-fun formatJournalDate(timestamp: Long): String {
-    val formatter = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
-    return formatter.format(Date(timestamp))
 }
