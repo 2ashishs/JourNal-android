@@ -547,7 +547,12 @@ fun CreateEntryBottomSheet(
                             }
                         ) {
                             // Since we added the precise "X" close button above, we can simplify this text to just "Photo"
-                            Text("Photo")
+                            Text(
+                                text = when {
+                                    draftState.capturedMediaPath != null -> "Retake Photo"
+                                    else -> "Photo"
+                                }
+                            )
                         }
                     }
 
@@ -562,7 +567,12 @@ fun CreateEntryBottomSheet(
                                 videoLauncher.launch(uri)
                             }
                         ) {
-                            Text("Video")
+                            Text(
+                                text = when {
+                                    draftState.capturedMediaPath != null -> "Retake Video"
+                                    else -> "Video"
+                                }
+                            )
                         }
                     }
 
