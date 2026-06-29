@@ -1,7 +1,10 @@
 package ash.app.journal.ui
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,17 +49,22 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -76,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -88,6 +97,7 @@ import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.utils.DragDropState
 import coil3.compose.rememberAsyncImagePainter
+import kotlinx.coroutines.delay
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -193,6 +203,9 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             onDetailsChange = viewModel::onDetailsChanged,
             onColorSelect = viewModel::onColorSelected,
             onMediaCapture = viewModel::onMediaCaptured,
+            isRecordingAudio = viewModel.isRecordingAudio,
+            startAudioRecording = viewModel::startAudioRecording,
+            stopAudioRecording = viewModel::stopAudioRecording,
             onSave = {
                 viewModel.saveCurrentEntry()
                 isCreateSheetOpen = false
@@ -328,6 +341,9 @@ fun CreateEntryBottomSheet(
     onDetailsChange: (String) -> Unit,
     onColorSelect: (String?) -> Unit,
     onMediaCapture: (String?, EntryMediaType) -> Unit,
+    isRecordingAudio: Boolean,
+    startAudioRecording: (Context) -> Unit,
+    stopAudioRecording: (Boolean) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -356,6 +372,14 @@ fun CreateEntryBottomSheet(
         draftState.autoTitlePlaceholder
     } else {
         "Title"
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startAudioRecording(context)
+        }
     }
 
     ModalBottomSheet(
@@ -544,9 +568,34 @@ fun CreateEntryBottomSheet(
 
                     if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.AUDIO) {
                         Button(
-                            onClick = { /* Future Audio note recording trigger pipeline hooks */ }
+                            onClick = {
+                                if (isRecordingAudio) {
+                                    stopAudioRecording(false)
+                                } else {
+                                    // Request permission dynamically; if granted, start recording
+                                    val hasPermission = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.RECORD_AUDIO
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                    if (hasPermission) {
+                                        startAudioRecording(context)
+                                    } else {
+                                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isRecordingAudio) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            )
                         ) {
-                            Text("Audio")
+                            // The button label text changes state interactively
+                            Text(
+                                text = when {
+                                    isRecordingAudio -> "Stop Recording"
+                                    draftState.capturedMediaPath != null -> "Retake Audio"
+                                    else -> "Audio"
+                                }
+                            )
                         }
                     }
                 }
@@ -619,107 +668,121 @@ fun DetailEntryBottomSheet(
                 )
 
                 entry.mediaPath?.let { path ->
-                    if (entry.mediaType == EntryMediaType.PHOTO) {
-                        var isImageFullscreen by remember { mutableStateOf(false) }
+                    when (entry.mediaType) {
+                        EntryMediaType.PHOTO -> {
+                            var isImageFullscreen by remember { mutableStateOf(false) }
 
-                        Image(
-                            painter = rememberAsyncImagePainter(File(path)),
-                            contentDescription = entry.title,
-                            contentScale = ContentScale.FillWidth,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .pointerInput(Unit) {
-                                    detectTapGestures(onDoubleTap = { isImageFullscreen = true })
-                                }
-                        )
+                            Image(
+                                painter = rememberAsyncImagePainter(File(path)),
+                                contentDescription = entry.title,
+                                contentScale = ContentScale.FillWidth,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(onDoubleTap = {
+                                            isImageFullscreen = true
+                                        })
+                                    }
+                            )
 
-                        if (isImageFullscreen) {
-                            Dialog(
-                                onDismissRequest = { isImageFullscreen = false },
-                                properties = DialogProperties(usePlatformDefaultWidth = false)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black)
-                                        .pointerInput(Unit) {
-                                            detectTapGestures(onDoubleTap = {
-                                                isImageFullscreen = false
-                                            })
-                                        },
-                                    contentAlignment = Alignment.Center
+                            if (isImageFullscreen) {
+                                Dialog(
+                                    onDismissRequest = { isImageFullscreen = false },
+                                    properties = DialogProperties(usePlatformDefaultWidth = false)
                                 ) {
-                                    Image(
-                                        painter = rememberAsyncImagePainter(File(path)),
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Fit, // Fits image inside boundaries without clipping details
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black)
+                                            .pointerInput(Unit) {
+                                                detectTapGestures(onDoubleTap = {
+                                                    isImageFullscreen = false
+                                                })
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Image(
+                                            painter = rememberAsyncImagePainter(File(path)),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Fit, // Fits image inside boundaries without clipping details
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                 }
                             }
                         }
-                    } else if (entry.mediaType == EntryMediaType.VIDEO) {
-                        LoopingVideoPlayer(entry.mediaPath)
+
+                        EntryMediaType.VIDEO -> {
+                            LoopingVideoPlayer(videoPath = path)
+                        }
+
+                        EntryMediaType.AUDIO -> {
+                            AudioPlayerRegion(audioPath = path)
+                        }
+
+                        EntryMediaType.TEXT -> {
+                            // Standard text layout flows cleanly with zero extra attachment
+                        }
                     }
                 }
             }
+        }
 
-            HorizontalDivider(
-                thickness = DividerDefaults.Thickness,
-                color = MaterialTheme.colorScheme.surfaceVariant
-            )
+        HorizontalDivider(
+            thickness = DividerDefaults.Thickness,
+            color = MaterialTheme.colorScheme.surfaceVariant
+        )
 
-            // FIXED BOTTOM ACTION ZONE
-            Row(
+        // FIXED BOTTOM ACTION ZONE
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxHeight()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(onClick = onDeleteClick) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_delete),
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
+                IconButton(onClick = onDeleteClick) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_delete),
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error
+                    )
                 }
+            }
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(onClick = onShareClick) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_share),
-                            contentDescription = "Share",
-                            tint = JournalColors.SecondaryMutedText
-                        )
-                    }
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(onClick = onShareClick) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_share),
+                        contentDescription = "Share",
+                        tint = JournalColors.SecondaryMutedText
+                    )
                 }
+            }
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(onClick = onEditClick) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_edit),
-                            contentDescription = "Edit",
-                            tint = JournalColors.SecondaryMutedText
-                        )
-                    }
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(onClick = onEditClick) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_edit),
+                        contentDescription = "Edit",
+                        tint = JournalColors.SecondaryMutedText
+                    )
                 }
             }
         }
@@ -814,6 +877,141 @@ fun LoopingVideoPlayer(videoPath: String) {
             }
         }
     }
+}
+
+@Composable
+fun AudioPlayerRegion(audioPath: String) {
+    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var currentPosition by remember { mutableFloatStateOf(0f) }
+    var totalDuration by remember { mutableFloatStateOf(0f) }
+
+    // Initialize MediaPlayer instance bound to the life of this view
+    LaunchedEffect(audioPath) {
+        val player = MediaPlayer().apply {
+            setDataSource(File(audioPath).absolutePath)
+            prepare()
+        }
+        mediaPlayer = player
+        totalDuration = player.duration.toFloat()
+
+        // Set up completion listener to clean up UI state when playback ends naturally
+        player.setOnCompletionListener {
+            isPlaying = false
+            currentPosition = 0f
+        }
+    }
+
+    // Coroutine loop to track and update the seek bar thumb track dynamically
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (isPlaying && mediaPlayer != null) {
+                mediaPlayer?.let {
+                    currentPosition = it.currentPosition.toFloat()
+                }
+                delay(100) // Poll every 100 milliseconds for fluid feedback transitions
+            }
+        }
+    }
+
+    // Clean up and free decoder hardware instances on sheet dismiss
+    DisposableEffect(Unit) {
+        onDispose {
+            mediaPlayer?.apply {
+                stop()
+                release()
+            }
+            mediaPlayer = null
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Play / Pause Toggle Action Node
+            IconButton(
+                onClick = {
+                    mediaPlayer?.let { player ->
+                        if (player.isPlaying) {
+                            player.pause()
+                            isPlaying = false
+                        } else {
+                            player.start()
+                            isPlaying = true
+                        }
+                    }
+                },
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    painter = painterResource(
+                        id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+                    ),
+                    contentDescription = if (isPlaying) "Pause Audio" else "Play Audio",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // Stream Progress Slider Tracker Panel
+            Column(modifier = Modifier.weight(1f)) {
+                Slider(
+                    value = currentPosition,
+                    valueRange = 0f..totalDuration.coerceAtLeast(1f),
+                    onValueChange = { seekTarget ->
+                        currentPosition = seekTarget
+                        mediaPlayer?.seekTo(seekTarget.toInt())
+                    },
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Optional: Dynamic duration timestamp tracker layout strings
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = formatMs(currentPosition.toInt()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = formatMs(totalDuration.toInt()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Simple internal helper to convert milliseconds to standard mm:ss format strings cleanly
+private fun formatMs(ms: Int): String {
+    val seconds = (ms / 1000) % 60
+    val minutes = (ms / (1000 * 60)) % 60
+    return String.format("%02d:%02d", minutes, seconds)
 }
 
 @Composable

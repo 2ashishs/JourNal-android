@@ -16,6 +16,13 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.content.Context
+import android.media.MediaRecorder
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import java.io.File
+import java.io.IOException
 
 class JournalViewModel(
     private val repository: JournalRepository
@@ -73,6 +80,88 @@ class JournalViewModel(
     fun formatJournalDate(timestamp: Long): String {
         val formatter = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
         return formatter.format(Date(timestamp))
+    }
+
+    private var mediaRecorder: MediaRecorder? = null
+    private var currentAudioFile: File? = null
+
+    // Expose a public UI state tracking whether the microphone is actively listening
+    var isRecordingAudio by mutableStateOf(false)
+        private set
+
+    fun startAudioRecording(context: Context) {
+        val directory = File(context.cacheDir, "journal_audio").apply { mkdirs() }
+        currentAudioFile = File.createTempFile("voice_note_", ".m4a", directory)
+
+        // Instantly lock the UI media type to AUDIO so other buttons vanish immediately
+        _draftState.update { it.copy(capturedMediaType = EntryMediaType.AUDIO) }
+
+        // Handle initialization based on Android API versions safely
+        mediaRecorder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            MediaRecorder(context)
+        } else {
+            @Suppress("DEPRECATION") MediaRecorder()
+        }.apply {
+            try {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setOutputFile(currentAudioFile?.absolutePath)
+                prepare()
+                start()
+                isRecordingAudio = true
+            } catch (e: IOException) {
+                e.printStackTrace()
+                // Reset to text if hardware fails initialization
+                _draftState.update { it.copy(capturedMediaType = EntryMediaType.TEXT) }
+            } catch (e: IllegalStateException) {
+                e.printStackTrace()
+                // Reset to text if hardware fails initialization
+                _draftState.update { it.copy(capturedMediaType = EntryMediaType.TEXT) }
+            }
+        }
+    }
+
+    fun stopAudioRecording(cancel: Boolean = false) {
+        try {
+            mediaRecorder?.apply {
+                stop()
+                release()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            mediaRecorder = null
+            isRecordingAudio = false
+        }
+
+        if (cancel) {
+            currentAudioFile?.delete()
+            currentAudioFile = null
+            // Revert cleanly to standard text mode on deletion
+            _draftState.update { it.copy(capturedMediaType = EntryMediaType.TEXT, capturedMediaPath = null, autoTitlePlaceholder = "") }
+        } else {
+            // Hand off the valid file path string directly to your unified placeholder layout engine!
+            currentAudioFile?.let { file ->
+                onMediaCaptured(file.absolutePath, EntryMediaType.AUDIO)
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // If the app process destroys the ViewModel, kill the hardware connection immediately
+        try {
+            mediaRecorder?.apply {
+                stop()
+                release()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            mediaRecorder = null
+            isRecordingAudio = false
+        }
     }
 
     // --- Database Actions ---
