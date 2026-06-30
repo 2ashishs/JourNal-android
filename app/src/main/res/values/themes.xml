@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Theme applied right at cold start -->
+    <style name="Theme.JourNaL.Starting" parent="Theme.SplashScreen">
+        <!-- Match your beautiful new light pastel background color -->
+        <item name="windowSplashScreenBackground">@color/pastel_bg</item>
+
+        <!-- Reference your app's main vector icon launcher drawable asset -->
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+
+        <!-- Sets the post-launch application layout landing theme -->
+        <item name="postSplashScreenTheme">@style/Theme.JourNaL</item>
+    </style>
 
     <style name="Theme.JourNaL" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>

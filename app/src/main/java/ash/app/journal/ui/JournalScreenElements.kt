@@ -1,7 +1,12 @@
 package ash.app.journal.ui
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -10,8 +15,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +33,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -46,15 +50,22 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -68,16 +79,39 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import ash.app.journal.R
+import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.utils.DragDropState
 import coil3.compose.rememberAsyncImagePainter
+import kotlinx.coroutines.delay
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,10 +127,19 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
         viewModel.moveEntry(from, to)
     }
 
-    val context = LocalContext.current // Grab the Android Context for Intent launching
+    val context = LocalContext.current
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("JourNaL") }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("JourNaL", fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background // Soft pastel foundation background tint
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -126,9 +169,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Using itemsIndexed lets us bind animations to stable physical layout index slots
                 itemsIndexed(entries, key = { _, entry -> entry.id }) { index, entry ->
-                    // FIXED: Compare the static item index directly with our tracking state pointer
                     val isCurrentDraggedItem = index == dragDropState.currentIndexOfDraggedItem
 
                     Box(
@@ -150,11 +191,11 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                 }
             }
 
-            // Standard Bottom Central "+" Placement Trigger Button
             FloatingActionButton(
                 onClick = { isCreateSheetOpen = true },
                 shape = RoundedCornerShape(50),
                 containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 24.dp)
@@ -167,19 +208,22 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
         }
     }
 
+
     if (isCreateSheetOpen) {
         CreateEntryBottomSheet(
             draftState = draftState,
             onTitleChange = viewModel::onTitleChanged,
             onDetailsChange = viewModel::onDetailsChanged,
             onColorSelect = viewModel::onColorSelected,
-            onPhotoCapture = viewModel::onPhotoCaptured,
+            onMediaCapture = viewModel::onMediaCaptured,
+            isRecordingAudio = viewModel.isRecordingAudio,
+            startAudioRecording = viewModel::startAudioRecording,
+            stopAudioRecording = viewModel::stopAudioRecording,
             onSave = {
                 viewModel.saveCurrentEntry()
                 isCreateSheetOpen = false
             },
             onDismiss = {
-                viewModel.clearDraft() // Reset state cleanup on dismiss
                 isCreateSheetOpen = false
             }
         )
@@ -200,41 +244,27 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             },
             onShareClick = {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
-
-                    val shareBody = "*${entry.title}*\n\n${entry.details}"
-
-                    // EXTRA_SUBJECT handles the email header line gracefully
+                    putExtra(Intent.EXTRA_TITLE, entry.title)
                     putExtra(Intent.EXTRA_SUBJECT, entry.title)
+                    putExtra(Intent.EXTRA_TEXT, entry.details)
 
-                    if (entry.photoPath != null) {
-                        // --- TEXT + IMAGE SHARING FLOW ---
-                        type = "image/*" // Tells Android the primary attachment payload is an image
-
-                        putExtra(Intent.EXTRA_TEXT, shareBody)
-
-                        // Convert the private file path string back into a file handle
-                        val imageFile = File(entry.photoPath)
+                    if (entry.mediaPath != null) {
+                        type = when (entry.mediaType) {
+                            EntryMediaType.PHOTO -> "image/*"
+                            EntryMediaType.VIDEO -> "video/*"
+                            EntryMediaType.AUDIO -> "audio/*"
+                            EntryMediaType.TEXT -> "text/plain"
+                        }
+                        val mediaFile = File(entry.mediaPath)
                         val authority = "${context.packageName}.fileprovider"
-
-                        // Convert to secure content:// URI via FileProvider
-                        val secureImageUri =
-                            FileProvider.getUriForFile(context, authority, imageFile)
-
-                        // Attach the secure media stream path hook
-                        putExtra(Intent.EXTRA_STREAM, secureImageUri)
-
-                        // CRITICAL SECURITY FLAG: Explicitly grants read permissions to the receiving app
+                        val mediaUri = FileProvider.getUriForFile(context, authority, mediaFile)
+                        putExtra(Intent.EXTRA_STREAM, mediaUri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     } else {
-                        // --- TEXT-ONLY FALLBACK FLOW ---
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, shareBody)
                     }
                 }
-
-                // Wrap in a system layout chooser container
-                val chooserIntent =
-                    Intent.createChooser(shareIntent, "Share entry via")
+                val chooserIntent = Intent.createChooser(shareIntent, "Share entry via")
                 context.startActivity(chooserIntent)
             }
         )
@@ -247,28 +277,51 @@ fun JournalRowItem(
     entry: JournalEntry,
     onClick: () -> Unit,
 ) {
+    val prefixIconRes = when (entry.mediaType) {
+        EntryMediaType.PHOTO -> R.drawable.ic_media_photo    // Replace with your drawable resource names
+        EntryMediaType.AUDIO -> R.drawable.ic_media_audio
+        EntryMediaType.VIDEO -> R.drawable.ic_media_video
+        EntryMediaType.TEXT -> R.drawable.ic_media_text
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
             .border(
                 width = 1.dp,
-                color = Color.LightGray,
-                shape = RoundedCornerShape(8.dp)
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(12.dp)
             )
             .clickable { onClick() },
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = JournalColors.DefaultSurface)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 4.dp,
+            pressedElevation = 2.dp,
+            draggedElevation = 8.dp
+        )
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(
+                painter = painterResource(prefixIconRes),
+                contentDescription = "Content Type Indicator",
+                tint = if (entry.hexColor != null) JournalColors.fromHex(entry.hexColor) else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .padding(start = 16.dp)
+                    .size(24.dp)
+            )
+
             Text(
                 text = entry.title.ifBlank { "Untitled Entry" },
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF1C1C1A),
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .weight(1f)
                     .padding(24.dp)
@@ -291,6 +344,11 @@ private fun createTempImageFile(context: Context): File {
     return File.createTempFile("captured_photo_", ".jpg", directory)
 }
 
+private fun createTempVideoFile(context: Context): File {
+    val directory = File(context.cacheDir, "journal_videos").apply { mkdirs() }
+    return File.createTempFile("captured_video_", ".mp4", directory)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateEntryBottomSheet(
@@ -298,22 +356,52 @@ fun CreateEntryBottomSheet(
     onTitleChange: (String) -> Unit,
     onDetailsChange: (String) -> Unit,
     onColorSelect: (String?) -> Unit,
-    onPhotoCapture: (String?) -> Unit,
+    onMediaCapture: (String?, EntryMediaType) -> Unit,
+    isRecordingAudio: Boolean,
+    startAudioRecording: (Context) -> Unit,
+    stopAudioRecording: (Boolean, Context) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     var tempPhotoPath by remember { mutableStateOf<String?>(null) }
+    var tempVideoPath by remember { mutableStateOf<String?>(null) }
+    var tempVideoUri by remember { mutableStateOf<Uri?>(null) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && tempPhotoPath != null) {
-            onPhotoCapture(tempPhotoPath)
+            onMediaCapture(tempPhotoPath, EntryMediaType.PHOTO)
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    val videoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CaptureVideo()
+    ) { success ->
+        if (success && tempVideoUri != null) {
+            onMediaCapture(tempVideoPath, EntryMediaType.VIDEO)
+        }
+    }
+
+    val dynamicAutoTitleLabel = if (draftState.autoTitlePlaceholder.isNotBlank()) {
+        draftState.autoTitlePlaceholder
+    } else {
+        "Title"
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startAudioRecording(context)
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -324,9 +412,14 @@ fun CreateEntryBottomSheet(
             OutlinedTextField(
                 value = draftState.title,
                 onValueChange = onTitleChange,
-                label = { Text("Title") },
+                label = { Text(dynamicAutoTitleLabel) },
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
+                singleLine = true,
+                maxLines = 1,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Words,
+                    imeAction = ImeAction.Next
+                ),
             )
 
             OutlinedTextField(
@@ -339,7 +432,6 @@ fun CreateEntryBottomSheet(
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
             )
 
-            // Color Selection Row (Including the Clear Option)
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -349,16 +441,15 @@ fun CreateEntryBottomSheet(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(Color.White)
+                        .background(MaterialTheme.colorScheme.surface)
                         .border(
                             width = if (draftState.selectedHexColor == null) 2.dp else 1.dp,
-                            color = if (draftState.selectedHexColor == null) MaterialTheme.colorScheme.primary else Color.LightGray,
+                            color = if (draftState.selectedHexColor == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                             shape = CircleShape
                         )
                         .clickable { onColorSelect(null) },
                     contentAlignment = Alignment.Center
                 ) {
-                    // Draws a clean diagonal "No" slash indicator line
                     Canvas(modifier = Modifier.size(24.dp)) {
                         drawLine(
                             color = Color.Red,
@@ -386,45 +477,261 @@ fun CreateEntryBottomSheet(
                 }
             }
 
-            // Square Thumbnail Preview Layout Container Block
-            draftState.capturedPhotoPath?.let { path ->
-                Image(
-                    painter = rememberAsyncImagePainter(File(path)),
-                    contentDescription = "Captured thumbnail",
-                    contentScale = ContentScale.Crop, // Crops target visually inside layout boundaries
+            draftState.capturedMediaPath?.let { path ->
+                Box(
                     modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                )
+                        .padding(top = 8.dp)
+                        .size(80.dp) // Slightly larger to comfortably accommodate the clear button
+                ) {
+                    Image(
+                        painter = rememberAsyncImagePainter(File(path)),
+                        contentDescription = "Captured media preview",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(72.dp)
+                            .align(Alignment.BottomStart)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable {
+                                // Quick UX Win: Clicking the thumbnail itself can trigger a retake context
+                            }
+                    )
+
+                    val overlayIconRes = when (draftState.capturedMediaType) {
+                        EntryMediaType.PHOTO -> R.drawable.ic_media_photo
+                        EntryMediaType.VIDEO -> R.drawable.ic_media_video
+                        EntryMediaType.AUDIO -> R.drawable.ic_media_audio
+                        EntryMediaType.TEXT -> null
+                    }
+
+                    overlayIconRes?.let { iconRes ->
+                        Box(
+                            modifier = Modifier
+                                .padding(bottom = 4.dp, end = 12.dp)
+                                .size(18.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                .align(Alignment.BottomEnd),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(iconRes),
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(10.dp)
+                            )
+                        }
+                    }
+                    // Clear/Remove Media Cross Button ---
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(MaterialTheme.colorScheme.error, CircleShape)
+                            .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                            .align(Alignment.TopEnd) // This will resolve the scope mismatch cleanly here
+                            .clickable {
+                                // Invoke a callback to pass null up to the ViewModel to clear out the media file references
+                                onMediaCapture(null, EntryMediaType.TEXT)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_close), // Make sure you have a close/clear vector icon
+                            contentDescription = "Remove Media",
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
             }
 
+            // A single, cohesive row container handling all bottom sheet controls
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
-                    onClick = {
-                        val file = createTempImageFile(context)
-                        val authority = "${context.packageName}.fileprovider"
-                        val uri = FileProvider.getUriForFile(context, authority, file)
-
-                        tempPhotoPath = file.absolutePath
-                        cameraLauncher.launch(uri)
-                    }
+                // Left Segment: Packs all mutually exclusive media choice chips cleanly together
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f) // Takes up remaining left-side real estate dynamically
                 ) {
-                    Text(if (draftState.capturedPhotoPath != null) "Retake Photo" else "Photo")
+                    if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.PHOTO) {
+                        Button(
+                            onClick = {
+                                val file = createTempImageFile(context)
+                                val authority = "${context.packageName}.fileprovider"
+                                val uri = FileProvider.getUriForFile(context, authority, file)
+                                tempPhotoPath = file.absolutePath
+                                cameraLauncher.launch(uri)
+                            }
+                        ) {
+                            // Since we added the precise "X" close button above, we can simplify this text to just "Photo"
+                            Text(
+                                text = when {
+                                    draftState.capturedMediaPath != null -> "Retake Photo"
+                                    else -> "Photo"
+                                }
+                            )
+                        }
+                    }
+
+                    if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.VIDEO) {
+                        Button(
+                            onClick = {
+                                val file = createTempVideoFile(context)
+                                val authority = "${context.packageName}.fileprovider"
+                                tempVideoPath = file.absolutePath
+                                val uri = FileProvider.getUriForFile(context, authority, file)
+                                tempVideoUri = uri
+                                videoLauncher.launch(uri)
+                            }
+                        ) {
+                            Text(
+                                text = when {
+                                    draftState.capturedMediaPath != null -> "Retake Video"
+                                    else -> "Video"
+                                }
+                            )
+                        }
+                    }
+
+                    if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.AUDIO) {
+                        Button(
+                            onClick = {
+                                if (isRecordingAudio) {
+                                    stopAudioRecording(false, context)
+                                } else {
+                                    // Request permission dynamically; if granted, start recording
+                                    val hasPermission = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.RECORD_AUDIO
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                    if (hasPermission) {
+                                        startAudioRecording(context)
+                                    } else {
+                                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isRecordingAudio) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            // The button label text changes state interactively
+                            Text(
+                                text = when {
+                                    isRecordingAudio -> "Stop Recording"
+                                    draftState.capturedMediaPath != null -> "Retake Audio"
+                                    else -> "Audio"
+                                }
+                            )
+                        }
+                    }
                 }
 
+                // Right Segment: Positioned perfectly on the same line between the center and right edge
                 Button(
                     onClick = onSave,
-                    enabled = draftState.title.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    enabled = draftState.title.isNotBlank() || draftState.autoTitlePlaceholder.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.padding(start = 16.dp)
                 ) {
                     Text("Save")
                 }
             }
+
         }
+    }
+}
+
+@Composable
+fun MarkdownText(text: String, style: TextStyle, color: Color) {
+    val annotatedString = remember(text) {
+        buildAnnotatedString {
+            val lines = text.split("\n")
+
+            lines.forEachIndexed { index, line ->
+                when {
+                    // --- HEADER SUPPORT (# Text) ---
+                    line.startsWith("# ") -> {
+                        withStyle(
+                            style = SpanStyle(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = (style.fontSize.value + 4).sp
+                            )
+                        ) {
+                            appendLineText(line.removePrefix("# "))
+                        }
+                    }
+
+                    // --- LIST SUPPORT (- Text) ---
+                    line.startsWith("- ") -> {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
+                            // Prefix with a clean bullet character symbol
+                            append("•  ")
+                            appendLineText(line.removePrefix("- "))
+                        }
+                    }
+
+                    // --- STANDARD LINE ---
+                    else -> {
+                        appendLineText(line)
+                    }
+                }
+
+                // Add a line break for all elements except the final line block
+                if (index < lines.lastIndex) {
+                    append("\n")
+                }
+            }
+        }
+    }
+
+    // Checking if any line is a list item to dynamically add padding block elements
+    val hasList = remember(text) { text.lines().any { it.startsWith("- ") } }
+
+    Text(
+        text = annotatedString,
+        style = style,
+        color = color,
+        modifier = Modifier.padding(vertical = if (hasList) 4.dp else 0.dp)
+    )
+}
+
+// Internal extension function to continue parsing **bold** and *italic* inside any line type
+private fun AnnotatedString.Builder.appendLineText(lineText: String) {
+    var currentIndex = 0
+    val pattern = Regex("(\\*\\*.*?\\*\\*|\\*.*?\\*)")
+    val matches = pattern.findAll(lineText)
+
+    for (match in matches) {
+        if (match.range.first > currentIndex) {
+            append(lineText.substring(currentIndex, match.range.first))
+        }
+
+        val token = match.value
+        when {
+            token.startsWith("**") && token.endsWith("**") -> {
+                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                    append(token.removeSurrounding("**"))
+                }
+            }
+
+            token.startsWith("*") && token.endsWith("*") -> {
+                withStyle(style = SpanStyle(fontStyle = FontStyle.Italic)) {
+                    append(token.removeSurrounding("*"))
+                }
+            }
+
+            else -> append(token)
+        }
+        currentIndex = match.range.last + 1
+    }
+
+    if (currentIndex < lineText.length) {
+        append(lineText.substring(currentIndex))
     }
 }
 
@@ -439,18 +746,14 @@ fun DetailEntryBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
-        // Main container that handles safe system navigation spacing at the bottom
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
         ) {
-
-            // ==========================================
-            // ANCHORED ZONE (Always visible at the top)
-            // ==========================================
+            // ANCHORED ZONE (Title & Dynamic Divider)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -460,116 +763,404 @@ fun DetailEntryBottomSheet(
                 Text(
                     text = entry.title,
                     style = MaterialTheme.typography.headlineSmall,
-                    color = Color.Black
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 HorizontalDivider(
                     thickness = DividerDefaults.Thickness,
-                    color = DividerDefaults.color
+                    color = MaterialTheme.colorScheme.surfaceVariant
                 )
             }
 
-            // ==========================================
-            // SCROLLABLE ZONE (Only Details & Photo scroll)
-            // ==========================================
+            // SCROLLABLE ZONE (Details & Photo)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(
-                        1f,
-                        fill = false
-                    ) // Shrinks to fit short content, caps at max screen height
+                    .weight(1f, fill = false)
                     .verticalScroll(rememberScrollState())
-                    .padding(
-                        start = 24.dp,
-                        end = 24.dp,
-                        top = 8.dp,
-                        bottom = 8.dp
-                    ), // Tighter vertical gaps
+                    .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-
-                Text(
-                    text = entry.details,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.DarkGray
-                )
-
-                // Photo Layout: Preserves aspect ratio completely without cropping details
-                entry.photoPath?.let { path ->
-                    Image(
-                        painter = rememberAsyncImagePainter(File(path)),
-                        contentDescription = entry.title,
-                        contentScale = ContentScale.FillWidth, // Preserves every pixel detail
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
+                entry.details.takeIf { it.isNotBlank() }?.let { entryDetails ->
+                    MarkdownText(
+                        text = entryDetails,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = JournalColors.SecondaryMutedText
                     )
                 }
-            }
 
-            // Divider separating content from action target zone
-            HorizontalDivider(thickness = 1.dp, color = Color.LightGray)
+                entry.mediaPath?.let { path ->
+                    when (entry.mediaType) {
+                        EntryMediaType.PHOTO -> {
+                            var isImageFullscreen by remember { mutableStateOf(false) }
 
-            // ==========================================
-            // FIXED ACTION ZONE (Low-profile, uncompressed)
-            // ==========================================
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp), // Reduced from 56.dp+ to keep it low-profile and tight
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Left Target Box: Delete Action
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(onClick = onDeleteClick) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_delete),
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
+                            Image(
+                                painter = rememberAsyncImagePainter(File(path)),
+                                contentDescription = entry.title,
+                                contentScale = ContentScale.FillWidth,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(onDoubleTap = {
+                                            isImageFullscreen = true
+                                        })
+                                    }
+                            )
 
-                // Center Target Box: Share Action
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(onClick = onShareClick) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_share),
-                            contentDescription = "Share",
-                            tint = Color.DarkGray
-                        )
-                    }
-                }
+                            if (isImageFullscreen) {
+                                Dialog(
+                                    onDismissRequest = { isImageFullscreen = false },
+                                    properties = DialogProperties(usePlatformDefaultWidth = false)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black)
+                                            .pointerInput(Unit) {
+                                                detectTapGestures(onDoubleTap = {
+                                                    isImageFullscreen = false
+                                                })
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Image(
+                                            painter = rememberAsyncImagePainter(File(path)),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Fit, // Fits image inside boundaries without clipping details
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
-                // Right Target Box: Edit Action (Ergonomic thumb placement)
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(onClick = onEditClick) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_edit),
-                            contentDescription = "Edit",
-                            tint = Color.DarkGray
-                        )
+                        EntryMediaType.VIDEO -> {
+                            LoopingVideoPlayer(videoPath = path)
+                        }
+
+                        EntryMediaType.AUDIO -> {
+                            AudioPlayerRegion(audioPath = path)
+                        }
+
+                        EntryMediaType.TEXT -> {
+                            // Standard text layout flows cleanly with zero extra attachment
+                        }
                     }
                 }
             }
         }
+
+        HorizontalDivider(
+            thickness = DividerDefaults.Thickness,
+            color = MaterialTheme.colorScheme.surfaceVariant
+        )
+
+        // FIXED BOTTOM ACTION ZONE
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(onClick = onDeleteClick) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_delete),
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(onClick = onShareClick) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_share),
+                        contentDescription = "Share",
+                        tint = JournalColors.SecondaryMutedText
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(onClick = onEditClick) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_edit),
+                        contentDescription = "Edit",
+                        tint = JournalColors.SecondaryMutedText
+                    )
+                }
+            }
+        }
     }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+@Composable
+fun LoopingVideoPlayer(videoPath: String) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current // Access the host activity's lifecycle state
+    var isFullscreen by remember { mutableStateOf(false) }
+
+    // Master unified ExoPlayer instance tied to this lifecycle
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(File(videoPath).toURI().toString()))
+            repeatMode = Player.REPEAT_MODE_ALL
+            playWhenReady = true
+            prepare()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        // Added this code to prevent exoplayer from running in background
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                // The app went to background or user switched apps -> Pause the hardware stream
+                Lifecycle.Event.ON_PAUSE -> {
+                    exoPlayer.pause()
+                }
+                // User came back to the app foreground -> Resume playback smoothly
+                Lifecycle.Event.ON_RESUME -> {
+                    exoPlayer.play()
+                }
+
+                else -> {}
+            }
+        }
+
+        // Register our observer onto the activity lifecycle
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        // Clean up: unregister observer and completely release the video decoder on view death
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            exoPlayer.release()
+        }
+    }
+
+    // Inline standard layout container player
+    AndroidView(
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                useController = false
+            }
+        },
+        update = { playerView ->
+            // --- THE FIXED SURFACE HAND-OFF ---
+            if (isFullscreen) {
+                // If full-screen is active, release the player from this view
+                // so the dialog's PlayerView can claim the surface safely
+                playerView.player = null
+            } else {
+                // When coming back, explicitly re-attach the engine to force a surface redraw
+                if (playerView.player != exoPlayer) {
+                    playerView.player = null // Clear old texture cache reference
+                    playerView.player = exoPlayer
+                }
+            }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(360.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .pointerInput(isFullscreen) {
+                detectTapGestures(
+                    onTap = { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() },
+                    onDoubleTap = { isFullscreen = true }
+                )
+            }
+    )
+
+    // Fullscreen Overlay Dialog
+    if (isFullscreen) {
+        Dialog(
+            onDismissRequest = { isFullscreen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() },
+                            onDoubleTap = { isFullscreen = false }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            useController = false
+                        }
+                    },
+                    update = { fullscreenPlayerView ->
+                        // Claim the player engine for the fullscreen view layer
+                        if (fullscreenPlayerView.player != exoPlayer) {
+                            fullscreenPlayerView.player = exoPlayer
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AudioPlayerRegion(audioPath: String) {
+    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var currentPosition by remember { mutableFloatStateOf(0f) }
+    var totalDuration by remember { mutableFloatStateOf(0f) }
+
+    // Initialize MediaPlayer instance bound to the life of this view
+    LaunchedEffect(audioPath) {
+        val player = MediaPlayer().apply {
+            setDataSource(File(audioPath).absolutePath)
+            prepare()
+            start()
+        }
+        mediaPlayer = player
+        totalDuration = player.duration.toFloat()
+        isPlaying = true
+
+        // Set up completion listener to clean up UI state when playback ends naturally
+        player.setOnCompletionListener {
+            isPlaying = false
+            currentPosition = 0f
+        }
+    }
+
+    // Coroutine loop to track and update the seek bar thumb track dynamically
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (isPlaying && mediaPlayer != null) {
+                mediaPlayer?.let {
+                    currentPosition = it.currentPosition.toFloat()
+                }
+                delay(100.milliseconds) // Poll every 100 milliseconds for fluid feedback transitions
+            }
+        }
+    }
+
+    // Clean up and free decoder hardware instances on sheet dismiss
+    DisposableEffect(Unit) {
+        onDispose {
+            mediaPlayer?.apply {
+                stop()
+                release()
+            }
+            mediaPlayer = null
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Play / Pause Toggle Action Node
+            IconButton(
+                onClick = {
+                    mediaPlayer?.let { player ->
+                        if (player.isPlaying) {
+                            player.pause()
+                            isPlaying = false
+                        } else {
+                            player.start()
+                            isPlaying = true
+                        }
+                    }
+                },
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    painter = painterResource(
+                        id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+                    ),
+                    contentDescription = if (isPlaying) "Pause Audio" else "Play Audio",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // Stream Progress Slider Tracker Panel
+            Column(modifier = Modifier.weight(1f)) {
+                Slider(
+                    value = currentPosition,
+                    valueRange = 0f..totalDuration.coerceAtLeast(1f),
+                    onValueChange = { seekTarget ->
+                        currentPosition = seekTarget
+                        mediaPlayer?.seekTo(seekTarget.toInt())
+                    },
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Optional: Dynamic duration timestamp tracker layout strings
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = formatMs(currentPosition.toInt()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = formatMs(totalDuration.toInt()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Simple internal helper to convert milliseconds to standard mm:ss format strings cleanly
+@SuppressLint("DefaultLocale")
+private fun formatMs(ms: Int): String {
+    val seconds = (ms / 1000) % 60
+    val minutes = (ms / (1000 * 60)) % 60
+    return String.format("%02d:%02d", minutes, seconds)
 }
 
 @Composable

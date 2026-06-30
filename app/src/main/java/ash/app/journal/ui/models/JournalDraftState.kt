@@ -6,5 +6,7 @@ data class JournalDraftState(
     val title: String = "",
     val details: String = "",
     val selectedHexColor: String? = null,
-    val capturedPhotoPath: String? = null,
+    val capturedMediaPath: String? = null,
+    val capturedMediaType: EntryMediaType = EntryMediaType.TEXT,
+    val autoTitlePlaceholder: String = "",
 )

@@ -1,10 +1,19 @@
 package ash.app.journal.ui
 
+import android.content.Context
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.media.MediaRecorder
+import android.os.Build
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.data.JournalRepository
+import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
+import ash.app.journal.ui.models.JournalEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -12,6 +21,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class JournalViewModel(
     private val repository: JournalRepository
@@ -43,8 +57,164 @@ class JournalViewModel(
         _draftState.update { it.copy(selectedHexColor = hexColor) }
     }
 
-    fun onPhotoCaptured(path: String?) {
-        _draftState.update { it.copy(capturedPhotoPath = path) }
+    fun onMediaCaptured(path: String?, type: EntryMediaType) {
+        _draftState.update { currentDraft ->
+            val autoTitle = if (path != null) {
+                when (type) {
+                    EntryMediaType.PHOTO -> "Photo on ${formatJournalDate(System.currentTimeMillis())}"
+                    EntryMediaType.VIDEO -> "Video on ${formatJournalDate(System.currentTimeMillis())}"
+                    EntryMediaType.AUDIO -> "Audio on ${formatJournalDate(System.currentTimeMillis())}"
+                    else -> ""
+                }
+            } else {
+                ""
+            }
+            currentDraft.copy(
+                capturedMediaPath = path,
+                capturedMediaType = if (path != null) type else EntryMediaType.TEXT,
+                autoTitlePlaceholder = autoTitle
+            )
+        }
+    }
+
+    /**
+     * Converts @param:timestamp to user readable date
+     */
+    fun formatJournalDate(timestamp: Long): String {
+        val formatter = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
+        return formatter.format(Date(timestamp))
+    }
+
+    private var mediaRecorder: MediaRecorder? = null
+    private var currentAudioFile: File? = null
+
+    // Expose a public UI state tracking whether the microphone is actively listening
+    var isRecordingAudio by mutableStateOf(false)
+        private set
+
+    fun startAudioRecording(context: Context) {
+        val directory = File(context.cacheDir, "journal_audio").apply { mkdirs() }
+        currentAudioFile = File.createTempFile("voice_note_", ".m4a", directory)
+
+        // Instantly lock the UI media type to AUDIO so other buttons vanish immediately
+        _draftState.update { it.copy(capturedMediaType = EntryMediaType.AUDIO) }
+
+        // Get audio recording device
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // API 31+ replacement
+            // 1. Fetch all connected communication devices
+            val devices = audioManager.availableCommunicationDevices
+
+            // 2. Look for a Bluetooth Headset or BLE Audio channel in the active connections
+            val bluetoothDevice = devices.firstOrNull {
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                        it.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+            }
+
+            // 3. Request the OS to bind specifically to this hardware profile
+            bluetoothDevice?.let { audioManager.setCommunicationDevice(it) }
+        } else {
+            // Legacy fallback wrapper for older OS installs
+            @Suppress("DEPRECATION")
+            if (audioManager.isBluetoothScoAvailableOffCall) {
+                @Suppress("DEPRECATION")
+                audioManager.startBluetoothSco()
+                @Suppress("DEPRECATION")
+                audioManager.isBluetoothScoOn = true
+            }
+        }
+
+        // Handle initialization based on Android API versions safely
+        mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            MediaRecorder(context)
+        } else {
+            @Suppress("DEPRECATION") MediaRecorder()
+        }.apply {
+            try {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioSamplingRate(44100)      // High-Fidelity standard studio frequency range (44.1 kHz)
+                setAudioEncodingBitRate(128000)  // Boost bandwidth path to 128 kbps for crystalline clarity
+                setAudioChannels(1)              // Mono tracking optimized cleanly for dictation voice registers
+                setOutputFile(currentAudioFile?.absolutePath)
+                prepare()
+                start()
+                isRecordingAudio = true
+            } catch (e: IOException) {
+                e.printStackTrace()
+                // Reset to text if hardware fails initialization
+                _draftState.update { it.copy(capturedMediaType = EntryMediaType.TEXT) }
+            } catch (e: IllegalStateException) {
+                e.printStackTrace()
+                // Reset to text if hardware fails initialization
+                _draftState.update { it.copy(capturedMediaType = EntryMediaType.TEXT) }
+            }
+        }
+    }
+
+    fun stopAudioRecording(cancel: Boolean = false, context: Context) {
+        try {
+            mediaRecorder?.apply {
+                stop()
+                release()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            mediaRecorder = null
+            isRecordingAudio = false
+        }
+
+        if (cancel) {
+            currentAudioFile?.delete()
+            currentAudioFile = null
+            // Revert cleanly to standard text mode on deletion
+            _draftState.update {
+                it.copy(
+                    capturedMediaType = EntryMediaType.TEXT,
+                    capturedMediaPath = null,
+                    autoTitlePlaceholder = ""
+                )
+            }
+        } else {
+            // Hand off the valid file path string directly to your unified placeholder layout engine!
+            currentAudioFile?.let { file ->
+                onMediaCaptured(file.absolutePath, EntryMediaType.AUDIO)
+            }
+        }
+
+        // Release audio recording device
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Releases your app's explicit audio device request cleanly
+            audioManager.clearCommunicationDevice()
+        } else {
+            @Suppress("DEPRECATION")
+            if (audioManager.isBluetoothScoOn) {
+                @Suppress("DEPRECATION")
+                audioManager.isBluetoothScoOn = false
+                @Suppress("DEPRECATION")
+                audioManager.stopBluetoothSco()
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // If the app process destroys the ViewModel, kill the hardware connection immediately
+        try {
+            mediaRecorder?.apply {
+                stop()
+                release()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            mediaRecorder = null
+            isRecordingAudio = false
+        }
     }
 
     // --- Database Actions ---
@@ -54,8 +224,8 @@ class JournalViewModel(
         val currentDraft = _draftState.value
 
         // CRITICAL VALIDATION: Prevent saving if the title is completely empty or whitespace
-        if (currentDraft.title.isBlank()) {
-            // In a production app, you could emit a UI "Toast" or "Snackbar" error state here
+        val finalTitle = currentDraft.title.ifBlank { currentDraft.autoTitlePlaceholder }
+        if (finalTitle.isBlank()) {
             return
         }
 
@@ -63,25 +233,30 @@ class JournalViewModel(
             if (currentDraft.editingEntryId != null) {
                 // --- EDIT MODE: Fetch the existing entry configuration to preserve order index ---
                 val existingList = journalEntries.value
-                val existingEntry = existingList.firstOrNull { it.id == currentDraft.editingEntryId }
+                val existingEntry =
+                    existingList.firstOrNull { it.id == currentDraft.editingEntryId }
                 val currentOrderIndex = existingEntry?.orderIndex ?: 0
 
                 val updatedEntry = JournalEntry(
                     id = currentDraft.editingEntryId, // Matching ID triggers Room's REPLACE / Update mechanism
-                    title = currentDraft.title,
+                    title = finalTitle,
                     details = currentDraft.details,
                     hexColor = currentDraft.selectedHexColor,
-                    photoPath = currentDraft.capturedPhotoPath,
+                    mediaPath = currentDraft.capturedMediaPath,
+                    mediaType = currentDraft.capturedMediaType,
+                    timestamp = System.currentTimeMillis(),
                     orderIndex = currentOrderIndex
                 )
                 repository.insertEntry(updatedEntry)
             } else {
                 // --- NEW ENTRY MODE ---
                 val newEntry = JournalEntry(
-                    title = currentDraft.title,
+                    title = finalTitle,
                     details = currentDraft.details,
                     hexColor = currentDraft.selectedHexColor,
-                    photoPath = currentDraft.capturedPhotoPath,
+                    mediaPath = currentDraft.capturedMediaPath,
+                    mediaType = currentDraft.capturedMediaType,
+                    timestamp = System.currentTimeMillis(),
                     orderIndex = journalEntries.value.size
                 )
                 repository.insertEntry(newEntry)
@@ -135,12 +310,14 @@ class JournalViewModel(
                 title = entry.title,
                 details = entry.details,
                 selectedHexColor = entry.hexColor,
-                capturedPhotoPath = entry.photoPath
+                capturedMediaPath = entry.mediaPath,
+                capturedMediaType = entry.mediaType,
             )
         }
     }
 
     // Clear draft explicitly if user discards changes
+    @Suppress("unused")
     fun clearDraft() {
         _draftState.value = JournalDraftState()
     }
