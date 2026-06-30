@@ -1,5 +1,13 @@
 package ash.app.journal.ui
 
+import android.content.Context
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.media.MediaRecorder
+import android.os.Build
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ash.app.journal.ui.data.JournalRepository
@@ -13,16 +21,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import android.content.Context
-import android.media.MediaRecorder
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import java.io.File
-import java.io.IOException
 
 class JournalViewModel(
     private val repository: JournalRepository
@@ -96,8 +99,33 @@ class JournalViewModel(
         // Instantly lock the UI media type to AUDIO so other buttons vanish immediately
         _draftState.update { it.copy(capturedMediaType = EntryMediaType.AUDIO) }
 
+        // Get audio recording device
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // API 31+ replacement
+            // 1. Fetch all connected communication devices
+            val devices = audioManager.availableCommunicationDevices
+
+            // 2. Look for a Bluetooth Headset or BLE Audio channel in the active connections
+            val bluetoothDevice = devices.firstOrNull {
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                        it.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+            }
+
+            // 3. Request the OS to bind specifically to this hardware profile
+            bluetoothDevice?.let { audioManager.setCommunicationDevice(it) }
+        } else {
+            // Legacy fallback wrapper for older OS installs
+            @Suppress("DEPRECATION")
+            if (audioManager.isBluetoothScoAvailableOffCall) {
+                @Suppress("DEPRECATION")
+                audioManager.startBluetoothSco()
+                @Suppress("DEPRECATION")
+                audioManager.isBluetoothScoOn = true
+            }
+        }
+
         // Handle initialization based on Android API versions safely
-        mediaRecorder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             MediaRecorder(context)
         } else {
             @Suppress("DEPRECATION") MediaRecorder()
@@ -106,6 +134,9 @@ class JournalViewModel(
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioSamplingRate(44100)      // High-Fidelity standard studio frequency range (44.1 kHz)
+                setAudioEncodingBitRate(128000)  // Boost bandwidth path to 128 kbps for crystalline clarity
+                setAudioChannels(1)              // Mono tracking optimized cleanly for dictation voice registers
                 setOutputFile(currentAudioFile?.absolutePath)
                 prepare()
                 start()
@@ -122,7 +153,7 @@ class JournalViewModel(
         }
     }
 
-    fun stopAudioRecording(cancel: Boolean = false) {
+    fun stopAudioRecording(cancel: Boolean = false, context: Context) {
         try {
             mediaRecorder?.apply {
                 stop()
@@ -139,11 +170,33 @@ class JournalViewModel(
             currentAudioFile?.delete()
             currentAudioFile = null
             // Revert cleanly to standard text mode on deletion
-            _draftState.update { it.copy(capturedMediaType = EntryMediaType.TEXT, capturedMediaPath = null, autoTitlePlaceholder = "") }
+            _draftState.update {
+                it.copy(
+                    capturedMediaType = EntryMediaType.TEXT,
+                    capturedMediaPath = null,
+                    autoTitlePlaceholder = ""
+                )
+            }
         } else {
             // Hand off the valid file path string directly to your unified placeholder layout engine!
             currentAudioFile?.let { file ->
                 onMediaCaptured(file.absolutePath, EntryMediaType.AUDIO)
+            }
+        }
+
+        // Release audio recording device
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Releases your app's explicit audio device request cleanly
+            audioManager.clearCommunicationDevice()
+        } else {
+            @Suppress("DEPRECATION")
+            if (audioManager.isBluetoothScoOn) {
+                @Suppress("DEPRECATION")
+                audioManager.isBluetoothScoOn = false
+                @Suppress("DEPRECATION")
+                audioManager.stopBluetoothSco()
             }
         }
     }
@@ -264,6 +317,7 @@ class JournalViewModel(
     }
 
     // Clear draft explicitly if user discards changes
+    @Suppress("unused")
     fun clearDraft() {
         _draftState.value = JournalDraftState()
     }

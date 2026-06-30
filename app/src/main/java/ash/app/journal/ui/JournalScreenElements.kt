@@ -1,6 +1,7 @@
 package ash.app.journal.ui
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -78,14 +79,25 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -99,6 +111,7 @@ import ash.app.journal.ui.utils.DragDropState
 import coil3.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.delay
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -231,21 +244,24 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             },
             onShareClick = {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    val shareBody = "*${entry.title}*\n\n${entry.details}"
+                    putExtra(Intent.EXTRA_TITLE, entry.title)
                     putExtra(Intent.EXTRA_SUBJECT, entry.title)
+                    putExtra(Intent.EXTRA_TEXT, entry.details)
 
                     if (entry.mediaPath != null) {
-                        type = "image/*"
-                        putExtra(Intent.EXTRA_TEXT, shareBody)
-                        val imageFile = File(entry.mediaPath)
+                        type = when (entry.mediaType) {
+                            EntryMediaType.PHOTO -> "image/*"
+                            EntryMediaType.VIDEO -> "video/*"
+                            EntryMediaType.AUDIO -> "audio/*"
+                            EntryMediaType.TEXT -> "text/plain"
+                        }
+                        val mediaFile = File(entry.mediaPath)
                         val authority = "${context.packageName}.fileprovider"
-                        val secureImageUri =
-                            FileProvider.getUriForFile(context, authority, imageFile)
-                        putExtra(Intent.EXTRA_STREAM, secureImageUri)
+                        val mediaUri = FileProvider.getUriForFile(context, authority, mediaFile)
+                        putExtra(Intent.EXTRA_STREAM, mediaUri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     } else {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, shareBody)
                     }
                 }
                 val chooserIntent = Intent.createChooser(shareIntent, "Share entry via")
@@ -343,7 +359,7 @@ fun CreateEntryBottomSheet(
     onMediaCapture: (String?, EntryMediaType) -> Unit,
     isRecordingAudio: Boolean,
     startAudioRecording: (Context) -> Unit,
-    stopAudioRecording: (Boolean) -> Unit,
+    stopAudioRecording: (Boolean, Context) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -398,7 +414,12 @@ fun CreateEntryBottomSheet(
                 onValueChange = onTitleChange,
                 label = { Text(dynamicAutoTitleLabel) },
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words)
+                singleLine = true,
+                maxLines = 1,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Words,
+                    imeAction = ImeAction.Next
+                ),
             )
 
             OutlinedTextField(
@@ -580,7 +601,7 @@ fun CreateEntryBottomSheet(
                         Button(
                             onClick = {
                                 if (isRecordingAudio) {
-                                    stopAudioRecording(false)
+                                    stopAudioRecording(false, context)
                                 } else {
                                     // Request permission dynamically; if granted, start recording
                                     val hasPermission = ContextCompat.checkSelfPermission(
@@ -622,6 +643,95 @@ fun CreateEntryBottomSheet(
             }
 
         }
+    }
+}
+
+@Composable
+fun MarkdownText(text: String, style: TextStyle, color: Color) {
+    val annotatedString = remember(text) {
+        buildAnnotatedString {
+            val lines = text.split("\n")
+
+            lines.forEachIndexed { index, line ->
+                when {
+                    // --- HEADER SUPPORT (# Text) ---
+                    line.startsWith("# ") -> {
+                        withStyle(
+                            style = SpanStyle(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = (style.fontSize.value + 4).sp
+                            )
+                        ) {
+                            appendLineText(line.removePrefix("# "))
+                        }
+                    }
+
+                    // --- LIST SUPPORT (- Text) ---
+                    line.startsWith("- ") -> {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
+                            // Prefix with a clean bullet character symbol
+                            append("•  ")
+                            appendLineText(line.removePrefix("- "))
+                        }
+                    }
+
+                    // --- STANDARD LINE ---
+                    else -> {
+                        appendLineText(line)
+                    }
+                }
+
+                // Add a line break for all elements except the final line block
+                if (index < lines.lastIndex) {
+                    append("\n")
+                }
+            }
+        }
+    }
+
+    // Checking if any line is a list item to dynamically add padding block elements
+    val hasList = remember(text) { text.lines().any { it.startsWith("- ") } }
+
+    Text(
+        text = annotatedString,
+        style = style,
+        color = color,
+        modifier = Modifier.padding(vertical = if (hasList) 4.dp else 0.dp)
+    )
+}
+
+// Internal extension function to continue parsing **bold** and *italic* inside any line type
+private fun AnnotatedString.Builder.appendLineText(lineText: String) {
+    var currentIndex = 0
+    val pattern = Regex("(\\*\\*.*?\\*\\*|\\*.*?\\*)")
+    val matches = pattern.findAll(lineText)
+
+    for (match in matches) {
+        if (match.range.first > currentIndex) {
+            append(lineText.substring(currentIndex, match.range.first))
+        }
+
+        val token = match.value
+        when {
+            token.startsWith("**") && token.endsWith("**") -> {
+                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                    append(token.removeSurrounding("**"))
+                }
+            }
+
+            token.startsWith("*") && token.endsWith("*") -> {
+                withStyle(style = SpanStyle(fontStyle = FontStyle.Italic)) {
+                    append(token.removeSurrounding("*"))
+                }
+            }
+
+            else -> append(token)
+        }
+        currentIndex = match.range.last + 1
+    }
+
+    if (currentIndex < lineText.length) {
+        append(lineText.substring(currentIndex))
     }
 }
 
@@ -671,11 +781,13 @@ fun DetailEntryBottomSheet(
                     .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = entry.details,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = JournalColors.SecondaryMutedText
-                )
+                entry.details.takeIf { it.isNotBlank() }?.let { entryDetails ->
+                    MarkdownText(
+                        text = entryDetails,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = JournalColors.SecondaryMutedText
+                    )
+                }
 
                 entry.mediaPath?.let { path ->
                     when (entry.mediaType) {
@@ -803,6 +915,7 @@ fun DetailEntryBottomSheet(
 @Composable
 fun LoopingVideoPlayer(videoPath: String) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current // Access the host activity's lifecycle state
     var isFullscreen by remember { mutableStateOf(false) }
 
     // Master unified ExoPlayer instance tied to this lifecycle
@@ -815,8 +928,31 @@ fun LoopingVideoPlayer(videoPath: String) {
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose { exoPlayer.release() }
+    DisposableEffect(lifecycleOwner) {
+        // Added this code to prevent exoplayer from running in background
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                // The app went to background or user switched apps -> Pause the hardware stream
+                Lifecycle.Event.ON_PAUSE -> {
+                    exoPlayer.pause()
+                }
+                // User came back to the app foreground -> Resume playback smoothly
+                Lifecycle.Event.ON_RESUME -> {
+                    exoPlayer.play()
+                }
+
+                else -> {}
+            }
+        }
+
+        // Register our observer onto the activity lifecycle
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        // Clean up: unregister observer and completely release the video decoder on view death
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            exoPlayer.release()
+        }
     }
 
     // Inline standard layout container player
@@ -901,9 +1037,11 @@ fun AudioPlayerRegion(audioPath: String) {
         val player = MediaPlayer().apply {
             setDataSource(File(audioPath).absolutePath)
             prepare()
+            start()
         }
         mediaPlayer = player
         totalDuration = player.duration.toFloat()
+        isPlaying = true
 
         // Set up completion listener to clean up UI state when playback ends naturally
         player.setOnCompletionListener {
@@ -919,7 +1057,7 @@ fun AudioPlayerRegion(audioPath: String) {
                 mediaPlayer?.let {
                     currentPosition = it.currentPosition.toFloat()
                 }
-                delay(100) // Poll every 100 milliseconds for fluid feedback transitions
+                delay(100.milliseconds) // Poll every 100 milliseconds for fluid feedback transitions
             }
         }
     }
@@ -1018,6 +1156,7 @@ fun AudioPlayerRegion(audioPath: String) {
 }
 
 // Simple internal helper to convert milliseconds to standard mm:ss format strings cleanly
+@SuppressLint("DefaultLocale")
 private fun formatMs(ms: Int): String {
     val seconds = (ms / 1000) % 60
     val minutes = (ms / (1000 * 60)) % 60
