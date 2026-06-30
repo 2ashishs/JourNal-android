@@ -2,17 +2,21 @@
 
 ## 🛠️ New Features
 
-- ToDo
+- Allow other apps to share media to create Entry
+- Link / YouTube Support
+- Settings Screen
 
 
 ## 🎨️ Enhancements
 
-- ToDo
+- Move all colors to a single file. Fix color related issues.
+- Extract all text to `strings.xml` for transliteration
+- Landscape mode possibility
 
 ## 🐛 Refinements & Future-Proofing
 
 - The Bottom Sheet "Bounce" Fix: Debugging the Material 3 ModalBottomSheet state machine to prevent that annoying rubber-banding trigger when swiping closed.
-
-- Accessibility Overhaul: Implementing proper semantic properties, custom contentDescription states, and minimum touch target footprints to make our journal work seamlessly with TalkBack.
-
-- UI-UX Freshness for GenZ / Kids: Injecting vibrant, bento-grid inspired design aesthetics, micro-interactions, haptic feedback triggers, and playful typography variants to give the app a high-energy vibe.
+- Performance: Storage & Battery Usage
+- `lint` integration to detect and fix mistakes
+- Testing Integration: write test cases to catch edge cases and potential pitfalls.
+- UI-UX Freshness: Injecting vibrant design aesthetics, micro-interactions, haptic feedback triggers and playful typography variants to give the app a high-energy vibe.
