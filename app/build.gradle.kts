@@ -9,11 +9,6 @@ plugins {
 android {
     namespace = "ash.app.journal"
     compileSdk = 37
-//    compileSdk {
-//        version = release(36) {
-//            minorApiLevel = 1
-//        }
-//    }
 
     defaultConfig {
         applicationId = "ash.app.journal"
@@ -32,6 +27,10 @@ android {
             }
             isMinifyEnabled = true
             isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     compileOptions {

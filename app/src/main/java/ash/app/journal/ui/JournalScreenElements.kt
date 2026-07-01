@@ -119,7 +119,6 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
     val entries by viewModel.journalEntries.collectAsState()
     val draftState by viewModel.draftState.collectAsState()
 
-    var isCreateSheetOpen by remember { mutableStateOf(false) }
     var selectedEntryForDetail by remember { mutableStateOf<JournalEntry?>(null) }
 
     val lazyListState = rememberLazyListState()
@@ -192,7 +191,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             }
 
             FloatingActionButton(
-                onClick = { isCreateSheetOpen = true },
+                onClick = { viewModel.setCreateSheetVisibility(true) },
                 shape = RoundedCornerShape(50),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -209,7 +208,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
     }
 
 
-    if (isCreateSheetOpen) {
+    if (viewModel.isCreateSheetOpen) {
         CreateEntryBottomSheet(
             draftState = draftState,
             onTitleChange = viewModel::onTitleChanged,
@@ -221,10 +220,10 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             stopAudioRecording = viewModel::stopAudioRecording,
             onSave = {
                 viewModel.saveCurrentEntry()
-                isCreateSheetOpen = false
+                viewModel.setCreateSheetVisibility(false)
             },
             onDismiss = {
-                isCreateSheetOpen = false
+                viewModel.setCreateSheetVisibility(false)
             }
         )
     }
@@ -236,7 +235,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             onEditClick = {
                 viewModel.startEditing(entry)
                 selectedEntryForDetail = null
-                isCreateSheetOpen = true
+                viewModel.setCreateSheetVisibility(true)
             },
             onDeleteClick = {
                 viewModel.deleteEntry(entry)

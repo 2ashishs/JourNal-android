@@ -321,4 +321,26 @@ class JournalViewModel(
     fun clearDraft() {
         _draftState.value = JournalDraftState()
     }
+
+    // Public UI state to trigger opening the bottom creation sheet instantly from the activity pass
+    var isCreateSheetOpen by mutableStateOf(false)
+        private set
+
+    fun setCreateSheetVisibility(visible: Boolean) {
+        isCreateSheetOpen = visible
+    }
+
+    fun stageSharedTextIntoDraft(sharedText: String) {
+        clearDraft()
+        onDetailsChanged(sharedText)
+        setCreateSheetVisibility(true)
+    }
+
+    fun stageSharedMediaIntoDraft(filePath: String, mediaType: EntryMediaType) {
+        clearDraft()
+        // Inject the external media directly into the draft and auto generate title placeholder
+        onMediaCaptured(filePath, mediaType)
+        // Pop open the sheet on screen
+        setCreateSheetVisibility(true)
+    }
 }
