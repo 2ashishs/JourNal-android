@@ -4,6 +4,7 @@
 
 - Allow other apps to share media to create Entry
 - Link / YouTube Support
+- Import / Export entries functionality 
 - Settings Screen
 
 
