@@ -1,6 +1,6 @@
 # 📋 RoadMap v1.0.2
 
-## 🛠️ New Features
+## 🛠️ Features
 
 - Allow other apps to share media to create Entry
 - Link / YouTube Support
@@ -13,9 +13,10 @@
 - Extract all text to `strings.xml` for transliteration
 - Landscape mode possibility
 
-## 🐛 Refinements & Future-Proofing
+## 🐛 Fixes
 
 - The Bottom Sheet "Bounce" Fix: Debugging the Material 3 ModalBottomSheet state machine to prevent that annoying rubber-banding trigger when swiping closed.
+- UI Fixes for "Photo", "Video", "Audio" row
 - Performance: Storage & Battery Usage
 - `lint` integration to detect and fix mistakes
 - Testing Integration: write test cases to catch edge cases and potential pitfalls.
