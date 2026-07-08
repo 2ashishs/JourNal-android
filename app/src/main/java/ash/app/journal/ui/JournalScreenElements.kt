@@ -104,9 +104,11 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import ash.app.journal.R
+import ash.app.journal.ui.models.EntryColorTag
 import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
+import ash.app.journal.ui.theme.JournalTheme
 import ash.app.journal.ui.utils.DragDropState
 import coil3.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.delay
@@ -277,10 +279,17 @@ fun JournalRowItem(
     onClick: () -> Unit,
 ) {
     val prefixIconRes = when (entry.mediaType) {
-        EntryMediaType.PHOTO -> R.drawable.ic_media_photo    // Replace with your drawable resource names
+        EntryMediaType.PHOTO -> R.drawable.ic_media_photo
         EntryMediaType.AUDIO -> R.drawable.ic_media_audio
         EntryMediaType.VIDEO -> R.drawable.ic_media_video
         EntryMediaType.TEXT -> R.drawable.ic_media_text
+    }
+    val tagColor = when (entry.colorTag) {
+        EntryColorTag.RED -> JournalTheme.tagColors.tagRed
+        EntryColorTag.YELLOW -> JournalTheme.tagColors.tagYellow
+        EntryColorTag.GREEN -> JournalTheme.tagColors.tagGreen
+        EntryColorTag.BLUE -> JournalTheme.tagColors.tagBlue
+        else -> JournalTheme.tagColors.tagDefault
     }
 
     Card(
@@ -311,7 +320,7 @@ fun JournalRowItem(
             Icon(
                 painter = painterResource(prefixIconRes),
                 contentDescription = "Content Type Indicator",
-                tint = if (entry.hexColor != null) JournalColors.fromHex(entry.hexColor) else MaterialTheme.colorScheme.onSurface,
+                tint = tagColor,
                 modifier = Modifier
                     .padding(start = 16.dp)
                     .size(24.dp)
@@ -326,14 +335,12 @@ fun JournalRowItem(
                     .padding(24.dp)
             )
 
-            if (entry.hexColor != null) {
-                Box(
-                    modifier = Modifier
-                        .width(20.dp)
-                        .fillMaxHeight()
-                        .background(JournalColors.fromHex(entry.hexColor))
-                )
-            }
+            Box(
+                modifier = Modifier
+                    .width(20.dp)
+                    .fillMaxHeight()
+                    .background(tagColor)
+            )
         }
     }
 }
@@ -354,7 +361,7 @@ fun CreateEntryBottomSheet(
     draftState: JournalDraftState,
     onTitleChange: (String) -> Unit,
     onDetailsChange: (String) -> Unit,
-    onColorSelect: (String?) -> Unit,
+    onColorSelect: (EntryColorTag) -> Unit,
     onMediaCapture: (String?, EntryMediaType) -> Unit,
     isRecordingAudio: Boolean,
     startAudioRecording: (Context) -> Unit,
@@ -435,18 +442,18 @@ fun CreateEntryBottomSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. "No Color Selected" Option Button
+                // 1. "Default Tag Color Selected" Option Button
                 Box(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surface)
                         .border(
-                            width = if (draftState.selectedHexColor == null) 2.dp else 1.dp,
-                            color = if (draftState.selectedHexColor == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            width = if (draftState.selectedColorTag == EntryColorTag.DEFAULT) 2.dp else 1.dp,
+                            color = if (draftState.selectedColorTag == EntryColorTag.DEFAULT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                             shape = CircleShape
                         )
-                        .clickable { onColorSelect(null) },
+                        .clickable { onColorSelect(EntryColorTag.DEFAULT) },
                     contentAlignment = Alignment.Center
                 ) {
                     Canvas(modifier = Modifier.size(24.dp)) {
@@ -460,15 +467,24 @@ fun CreateEntryBottomSheet(
                 }
 
                 // 2. The Standard Primary Palette Colors List Loop
-                JournalColors.Palette.forEach { colorHex ->
+                EntryColorTag.entries.filter { it != EntryColorTag.DEFAULT }.forEach { colorTag ->
+
+                    val tagDisplayColor = when (colorTag) {
+                        EntryColorTag.RED -> JournalTheme.tagColors.tagRed
+                        EntryColorTag.YELLOW -> JournalTheme.tagColors.tagYellow
+                        EntryColorTag.GREEN -> JournalTheme.tagColors.tagGreen
+                        EntryColorTag.BLUE -> JournalTheme.tagColors.tagBlue
+                        else -> Color.Gray
+                    }
+
                     Box(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(JournalColors.fromHex(colorHex, Color.Gray))
-                            .clickable { onColorSelect(colorHex) }
+                            .background(tagDisplayColor)
+                            .clickable { onColorSelect(colorTag) }
                             .border(
-                                width = if (draftState.selectedHexColor == colorHex) 2.dp else 0.dp,
+                                width = if (draftState.selectedColorTag == colorTag) 2.dp else 0.dp,
                                 color = MaterialTheme.colorScheme.primary,
                                 shape = CircleShape
                             )
@@ -784,7 +800,7 @@ fun DetailEntryBottomSheet(
                     MarkdownText(
                         text = entryDetails,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = JournalColors.SecondaryMutedText
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -887,7 +903,7 @@ fun DetailEntryBottomSheet(
                     Icon(
                         painter = painterResource(R.drawable.ic_share),
                         contentDescription = "Share",
-                        tint = JournalColors.SecondaryMutedText
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -902,7 +918,7 @@ fun DetailEntryBottomSheet(
                     Icon(
                         painter = painterResource(R.drawable.ic_edit),
                         contentDescription = "Edit",
-                        tint = JournalColors.SecondaryMutedText
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -996,7 +1012,7 @@ fun LoopingVideoPlayer(videoPath: String) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black)
+                    .background(Color.Black.copy(alpha = 0.6f))
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() },

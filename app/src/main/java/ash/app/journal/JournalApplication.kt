@@ -2,19 +2,22 @@ package ash.app.journal
 
 import android.app.Application
 import androidx.room.Room
-import ash.app.journal.ui.data.AppDatabase
+import ash.app.journal.ui.data.JournalDatabase
 import ash.app.journal.ui.data.JournalRepository
 import ash.app.journal.ui.data.JournalRepositoryImpl
+import ash.app.journal.ui.data.MIGRATION_1_2
 
 class JournalApplication : Application() {
 
     // Instantiates database cleanly via lazy properties exactly when accessed
-    val database: AppDatabase by lazy {
+    val database: JournalDatabase by lazy {
         Room.databaseBuilder(
             this,
-            AppDatabase::class.java,
+            JournalDatabase::class.java,
             "journal_database"
-        ).build()
+        )
+            .addMigrations(MIGRATION_1_2) //Db migration: changed `hexColor` to `colorTag`
+            .build()
     }
 
     val repository: JournalRepository by lazy {

@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ash.app.journal.ui.data.JournalRepository
+import ash.app.journal.ui.models.EntryColorTag
 import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
@@ -53,8 +54,8 @@ class JournalViewModel(
         _draftState.update { it.copy(details = newDetails) }
     }
 
-    fun onColorSelected(hexColor: String?) {
-        _draftState.update { it.copy(selectedHexColor = hexColor) }
+    fun onColorSelected(colorTag: EntryColorTag) {
+        _draftState.update { it.copy(selectedColorTag = colorTag) }
     }
 
     fun onMediaCaptured(path: String?, type: EntryMediaType) {
@@ -241,7 +242,7 @@ class JournalViewModel(
                     id = currentDraft.editingEntryId, // Matching ID triggers Room's REPLACE / Update mechanism
                     title = finalTitle,
                     details = currentDraft.details,
-                    hexColor = currentDraft.selectedHexColor,
+                    colorTag = currentDraft.selectedColorTag,
                     mediaPath = currentDraft.capturedMediaPath,
                     mediaType = currentDraft.capturedMediaType,
                     timestamp = System.currentTimeMillis(),
@@ -253,7 +254,7 @@ class JournalViewModel(
                 val newEntry = JournalEntry(
                     title = finalTitle,
                     details = currentDraft.details,
-                    hexColor = currentDraft.selectedHexColor,
+                    colorTag = currentDraft.selectedColorTag,
                     mediaPath = currentDraft.capturedMediaPath,
                     mediaType = currentDraft.capturedMediaType,
                     timestamp = System.currentTimeMillis(),
@@ -309,7 +310,7 @@ class JournalViewModel(
                 editingEntryId = entry.id,
                 title = entry.title,
                 details = entry.details,
-                selectedHexColor = entry.hexColor,
+                selectedColorTag = entry.colorTag,
                 capturedMediaPath = entry.mediaPath,
                 capturedMediaType = entry.mediaType,
             )
