@@ -1,3 +1,25 @@
 <resources>
     <string name="app_name">JourNaL</string>
+    <string name="retake_photo">Retake Photo</string>
+    <string name="photo">Photo</string>
+    <string name="share_entry_via">Share entry via</string>
+    <string name="title">Title</string>
+    <string name="details">Details</string>
+    <string name="captured_media_preview">Captured media preview</string>
+    <string name="remove_media">Remove Media</string>
+    <string name="retake_video">Retake Video</string>
+    <string name="video">Video</string>
+    <string name="stop_recording">Stop Recording</string>
+    <string name="retake_audio">Retake Audio</string>
+    <string name="audio">Audio</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="share">Share</string>
+    <string name="edit">Edit</string>
+    <string name="pause_audio">Pause Audio</string>
+    <string name="play_audio">Play Audio</string>
+    <string name="untitled_entry">Untitled Entry</string>
+    <string name="content_type_indicator">Content Type Indicator</string>
+    <string name="add_entry">Add Entry</string>
+    <string name="photo_on">Photo on</string>
 </resources>

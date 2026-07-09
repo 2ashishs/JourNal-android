@@ -11,7 +11,6 @@
 ## 🎨️ Enhancements
 
 - Move all colors to a single file, specifically remove all `Color.` references in any file.
-- Extract all text to `strings.xml` for transliteration
 - Landscape mode possibility
 
 ## 🐛 Fixes

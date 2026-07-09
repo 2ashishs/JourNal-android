@@ -79,6 +79,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -129,6 +130,8 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
     }
 
     val context = LocalContext.current
+
+    val shareViaTitle = stringResource(R.string.share_entry_via)
 
     Scaffold(
         topBar = {
@@ -203,7 +206,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_add),
-                    contentDescription = "Add Entry"
+                    contentDescription = stringResource(R.string.add_entry)
                 )
             }
         }
@@ -265,7 +268,10 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                         type = "text/plain"
                     }
                 }
-                val chooserIntent = Intent.createChooser(shareIntent, "Share entry via")
+                val chooserIntent = Intent.createChooser(
+                    shareIntent,
+                    shareViaTitle
+                )
                 context.startActivity(chooserIntent)
             }
         )
@@ -319,7 +325,7 @@ fun JournalRowItem(
         ) {
             Icon(
                 painter = painterResource(prefixIconRes),
-                contentDescription = "Content Type Indicator",
+                contentDescription = stringResource(R.string.content_type_indicator),
                 tint = tagColor,
                 modifier = Modifier
                     .padding(start = 16.dp)
@@ -327,7 +333,7 @@ fun JournalRowItem(
             )
 
             Text(
-                text = entry.title.ifBlank { "Untitled Entry" },
+                text = entry.title.ifBlank { stringResource(R.string.untitled_entry) },
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
@@ -393,7 +399,7 @@ fun CreateEntryBottomSheet(
     val dynamicAutoTitleLabel = if (draftState.autoTitlePlaceholder.isNotBlank()) {
         draftState.autoTitlePlaceholder
     } else {
-        "Title"
+        stringResource(R.string.title)
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -431,7 +437,7 @@ fun CreateEntryBottomSheet(
             OutlinedTextField(
                 value = draftState.details,
                 onValueChange = onDetailsChange,
-                label = { Text("Details") },
+                label = { Text(stringResource(R.string.details)) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp),
@@ -500,7 +506,7 @@ fun CreateEntryBottomSheet(
                 ) {
                     Image(
                         painter = rememberAsyncImagePainter(File(path)),
-                        contentDescription = "Captured media preview",
+                        contentDescription = stringResource(R.string.captured_media_preview),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(72.dp)
@@ -551,7 +557,7 @@ fun CreateEntryBottomSheet(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_close), // Make sure you have a close/clear vector icon
-                            contentDescription = "Remove Media",
+                            contentDescription = stringResource(R.string.remove_media),
                             tint = Color.White,
                             modifier = Modifier.size(12.dp)
                         )
@@ -585,8 +591,8 @@ fun CreateEntryBottomSheet(
                             // Since we added the precise "X" close button above, we can simplify this text to just "Photo"
                             Text(
                                 text = when {
-                                    draftState.capturedMediaPath != null -> "Retake Photo"
-                                    else -> "Photo"
+                                    draftState.capturedMediaPath != null -> stringResource(R.string.retake_photo)
+                                    else -> stringResource(R.string.photo)
                                 }
                             )
                         }
@@ -605,8 +611,8 @@ fun CreateEntryBottomSheet(
                         ) {
                             Text(
                                 text = when {
-                                    draftState.capturedMediaPath != null -> "Retake Video"
-                                    else -> "Video"
+                                    draftState.capturedMediaPath != null -> stringResource(R.string.retake_video)
+                                    else -> stringResource(R.string.video)
                                 }
                             )
                         }
@@ -637,9 +643,9 @@ fun CreateEntryBottomSheet(
                             // The button label text changes state interactively
                             Text(
                                 text = when {
-                                    isRecordingAudio -> "Stop Recording"
-                                    draftState.capturedMediaPath != null -> "Retake Audio"
-                                    else -> "Audio"
+                                    isRecordingAudio -> stringResource(R.string.stop_recording)
+                                    draftState.capturedMediaPath != null -> stringResource(R.string.retake_audio)
+                                    else -> stringResource(R.string.audio)
                                 }
                             )
                         }
@@ -653,7 +659,7 @@ fun CreateEntryBottomSheet(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.padding(start = 16.dp)
                 ) {
-                    Text("Save")
+                    Text(stringResource(R.string.save))
                 }
             }
 
@@ -887,7 +893,7 @@ fun DetailEntryBottomSheet(
                 IconButton(onClick = onDeleteClick) {
                     Icon(
                         painter = painterResource(R.drawable.ic_delete),
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(R.string.delete),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -902,7 +908,7 @@ fun DetailEntryBottomSheet(
                 IconButton(onClick = onShareClick) {
                     Icon(
                         painter = painterResource(R.drawable.ic_share),
-                        contentDescription = "Share",
+                        contentDescription = stringResource(R.string.share),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -917,7 +923,7 @@ fun DetailEntryBottomSheet(
                 IconButton(onClick = onEditClick) {
                     Icon(
                         painter = painterResource(R.drawable.ic_edit),
-                        contentDescription = "Edit",
+                        contentDescription = stringResource(R.string.edit),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -1126,7 +1132,9 @@ fun AudioPlayerRegion(audioPath: String) {
                     painter = painterResource(
                         id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
                     ),
-                    contentDescription = if (isPlaying) "Pause Audio" else "Play Audio",
+                    contentDescription = if (isPlaying) stringResource(R.string.pause_audio) else stringResource(
+                        R.string.play_audio
+                    ),
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(24.dp)
                 )
