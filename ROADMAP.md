@@ -2,15 +2,15 @@
 
 ## 🛠️ Features
 
-- Allow other apps to share media to create Entry
-- Link / YouTube Support
+- Link & YouTube `EntryType` support
+- List `EntryType` support (optional)
 - Import / Export entries functionality 
 - Settings Screen
 
 
 ## 🎨️ Enhancements
 
-- Move all colors to a single file. Fix color related issues.
+- Move all colors to a single file, specifically remove all `Color.` references in any file.
 - Extract all text to `strings.xml` for transliteration
 - Landscape mode possibility
 

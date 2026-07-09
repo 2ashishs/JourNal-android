@@ -2,4 +2,7 @@
 
 - ProGuard optimization rules for release builds.
 - Added CHANGELOG.md
-- Support for receiving shared media (images, videos, and audio) from other apps via intent filters.
+- Allow other apps to share media / text to create Entry
+- Markdown support in `Details`
+- Fix color related issues
+- Migrate DB to change COLUMN `hexColor:String` to `colorTag: EntryColorTag`
