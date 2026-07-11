@@ -283,9 +283,12 @@ class JournalViewModel(
             val movedItem = currentList.removeAt(fromIndex)
             currentList.add(toIndex, movedItem)
 
+            val maxIndex = currentList.size - 1
             // Update the orderIndex property of each item based on its new position
             val updatedList = currentList.mapIndexed { index, item ->
-                item.copy(orderIndex = index)
+                // To display entries in DESC orderIndex. For ASC orderIndex, `invertedIndex = index`
+                val invertedIndex = maxIndex - index
+                item.copy(orderIndex = invertedIndex)
             }
 
             // Persist the batch update to Room DB via repository

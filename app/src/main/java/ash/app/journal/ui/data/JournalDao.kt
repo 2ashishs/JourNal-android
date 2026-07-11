@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface JournalDao {
 
-    @Query("SELECT * FROM journal_entries ORDER BY orderIndex ASC")
+    @Query("SELECT * FROM journal_entries ORDER BY orderIndex DESC")
     fun getAllEntries(): Flow<List<JournalEntry>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

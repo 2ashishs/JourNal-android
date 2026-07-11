@@ -38,6 +38,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -81,6 +82,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -88,6 +90,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -683,7 +687,7 @@ fun MarkdownText(text: String, style: TextStyle, color: Color) {
                                 fontSize = (style.fontSize.value + 4).sp
                             )
                         ) {
-                            appendLineText(line.removePrefix("# "))
+                            parseInlineLinks(line.removePrefix("# "))
                         }
                     }
 
@@ -692,13 +696,31 @@ fun MarkdownText(text: String, style: TextStyle, color: Color) {
                         withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
                             // Prefix with a clean bullet character symbol
                             append("•  ")
-                            appendLineText(line.removePrefix("- "))
+                            parseInlineLinks(line.removePrefix("- "))
+                        }
+                    }
+
+                    // --- LIST SUPPORT (* Text) ---
+                    line.startsWith("* ") -> {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
+                            // Prefix with a clean bullet character symbol
+                            append("•  ")
+                            parseInlineLinks(line.removePrefix("* "))
+                        }
+                    }
+
+                    // --- LIST SUPPORT (+ Text) ---
+                    line.startsWith("+ ") -> {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
+                            // Prefix with a clean bullet character symbol
+                            append("•  ")
+                            parseInlineLinks(line.removePrefix("+ "))
                         }
                     }
 
                     // --- STANDARD LINE ---
                     else -> {
-                        appendLineText(line)
+                        parseInlineLinks(line)
                     }
                 }
 
@@ -713,12 +735,56 @@ fun MarkdownText(text: String, style: TextStyle, color: Color) {
     // Checking if any line is a list item to dynamically add padding block elements
     val hasList = remember(text) { text.lines().any { it.startsWith("- ") } }
 
-    Text(
+    BasicText(
         text = annotatedString,
-        style = style,
-        color = color,
+        style = style.copy(color),
         modifier = Modifier.padding(vertical = if (hasList) 4.dp else 0.dp)
     )
+}
+
+/**
+ * Regex-driven parser to extract and render Markdown link syntaxes cleanly inline.
+ */
+private fun AnnotatedString.Builder.parseInlineLinks(text: String) {
+    // Matches explicit brackets [Title](URL) or raw bracket hooks <URL>
+    val linkRegex = """(\[([^]]+)]\((https?://[^\s)]+)\))|(<(https?://[^\s>]+)>)""".toRegex()
+
+    var lastIndex = 0
+
+    linkRegex.findAll(text).forEach { matchResult ->
+        // Append any plain leading text preceding the regex match point
+        if (matchResult.range.first > lastIndex) {
+            appendLineText(text.substring(lastIndex, matchResult.range.first))
+        }
+
+        val isNamedLink = matchResult.groups[1] != null
+        val displayText =
+            if (isNamedLink) matchResult.groups[2]!!.value else matchResult.groups[5]!!.value
+        val urlTarget =
+            if (isNamedLink) matchResult.groups[3]!!.value else matchResult.groups[5]!!.value
+
+        // Apply distinct Link Annotation architecture directly inline
+        withLink(
+            link = LinkAnnotation.Url(
+                url = urlTarget,
+                styles = androidx.compose.ui.text.TextLinkStyles(
+                    style = SpanStyle(
+                        color = Color(0xFF2196F3), // Sleek hyperlink blue color highlight
+                        textDecoration = TextDecoration.Underline
+                    )
+                )
+            )
+        ) {
+            appendLineText(displayText)
+        }
+
+        lastIndex = matchResult.range.last + 1
+    }
+
+    // Append any remaining plain trailing text blocks
+    if (lastIndex < text.length) {
+        appendLineText(text.substring(lastIndex))
+    }
 }
 
 // Internal extension function to continue parsing **bold** and *italic* inside any line type
