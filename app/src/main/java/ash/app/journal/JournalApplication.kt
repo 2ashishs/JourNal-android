@@ -5,7 +5,9 @@ import androidx.room.Room
 import ash.app.journal.ui.data.JournalDatabase
 import ash.app.journal.ui.data.JournalRepository
 import ash.app.journal.ui.data.JournalRepositoryImpl
+import ash.app.journal.ui.data.LinkPreviewRepository
 import ash.app.journal.ui.data.MIGRATION_1_2
+import okhttp3.OkHttpClient
 
 class JournalApplication : Application() {
 
@@ -20,7 +22,21 @@ class JournalApplication : Application() {
             .build()
     }
 
+    // 1. Core Database Repository
     val repository: JournalRepository by lazy {
         JournalRepositoryImpl(database.journalDao())
     }
+
+    // 2. Shared Network Engine Client
+    val okHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .retryOnConnectionFailure(true)
+            .build()
+    }
+
+    // 3. Link Preview Repository Instance
+    val linkPreviewRepository: LinkPreviewRepository by lazy {
+        LinkPreviewRepository(okHttpClient)
+    }
+
 }

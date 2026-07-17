@@ -11,10 +11,12 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ash.app.journal.ui.data.JournalRepository
+import ash.app.journal.ui.data.LinkPreviewRepository
 import ash.app.journal.ui.models.EntryColorTag
 import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
+import ash.app.journal.ui.models.LinkMetadata
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +31,8 @@ import java.util.Date
 import java.util.Locale
 
 class JournalViewModel(
-    private val repository: JournalRepository
+    private val repository: JournalRepository,
+    private val linkRepository: LinkPreviewRepository
 ) : ViewModel() {
 
     // 1. STREAM FROM DB: Automatically reads from Room and converts it into a StateFlow for Compose
@@ -203,7 +206,6 @@ class JournalViewModel(
     }
 
     override fun onCleared() {
-        super.onCleared()
         // If the app process destroys the ViewModel, kill the hardware connection immediately
         try {
             mediaRecorder?.apply {
@@ -347,4 +349,49 @@ class JournalViewModel(
         // Pop open the sheet on screen
         setCreateSheetVisibility(true)
     }
+
+    fun processMagicWand(currentDetails: String) {
+        viewModelScope.launch {
+            // 1. Precise regex to match raw text URLs (e.g., https://google.com)
+            val urlRegex = """https?://[^\s<>]+""".toRegex()
+            val distinctLinks =
+                urlRegex.findAll(currentDetails).map { it.value }.distinct().toList()
+
+            if (distinctLinks.isEmpty()) return@launch
+
+            var updatedDetails = currentDetails
+            val scannedMetadataList = mutableListOf<LinkMetadata>()
+
+            // 2. Fetch network preview layouts for each unique link found
+            distinctLinks.forEach { url ->
+                val metadata = linkRepository.fetchMetadata(url)
+                if (metadata != null) {
+                    scannedMetadataList.add(metadata)
+
+                    // Construct our explicit token line
+                    val cleanDescription = metadata.description.replace("\n", " ")
+                    val markdownCardToken = "[card](url=${metadata.url}|title=${metadata.title}|desc=$cleanDescription|img=${metadata.imageUrl})"
+
+                    // Replace the plain line URL text with our rich block token
+                    updatedDetails = updatedDetails.replace(url, markdownCardToken)
+                }
+            }
+
+            // 3. Update state properties
+            _draftState.update { currentDraft ->
+                // If only one link was fully fetched, apply the automation constraints
+                val newTitlePlaceholder = if (scannedMetadataList.size == 1) {
+                    scannedMetadataList.first().title
+                } else {
+                    currentDraft.title // Retain whatever text title is currently preset
+                }
+
+                currentDraft.copy(
+                    details = updatedDetails,
+                    autoTitlePlaceholder = newTitlePlaceholder.ifEmpty { currentDraft.title }
+                )
+            }
+        }
+    }
+
 }

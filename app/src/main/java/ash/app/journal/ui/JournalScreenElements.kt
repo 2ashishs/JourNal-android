@@ -9,6 +9,12 @@ import android.media.MediaPlayer
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -74,16 +80,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -91,6 +101,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -115,6 +126,7 @@ import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.theme.JournalTheme
 import ash.app.journal.ui.utils.DragDropState
+import coil3.compose.AsyncImage
 import coil3.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.delay
 import java.io.File
@@ -227,6 +239,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             isRecordingAudio = viewModel.isRecordingAudio,
             startAudioRecording = viewModel::startAudioRecording,
             stopAudioRecording = viewModel::stopAudioRecording,
+            onMagicWandPress = viewModel::processMagicWand,
             onSave = {
                 viewModel.saveCurrentEntry()
                 viewModel.setCreateSheetVisibility(false)
@@ -365,6 +378,97 @@ private fun createTempVideoFile(context: Context): File {
     return File.createTempFile("captured_video_", ".mp4", directory)
 }
 
+@Composable
+fun AudioRecordingIcon(
+    isRecording: Boolean,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurface
+) {
+    // 1. Set up the infinite animation loop engine
+    val transition = rememberInfiniteTransition(label = "EqualizerTransition")
+
+    // Animate structural progress from 0.0 to 1.0 back and forth
+    val animationProgress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "EqualizerProgress"
+    )
+
+    // 2. Draw via Canvas matching the exact 24dp footprint from your resource file
+    Canvas(modifier = modifier.size(24.dp)) {
+        // Compute layout scale coefficients mapping directly to your 960x960 viewport setup
+        val scaleX = size.width / 960f
+        val scaleY = size.height / 960f
+        val barWidth = 80f * scaleX
+
+        // --- MATH RULES FROM DECONSTRUCTED PATH DATA ---
+        // Your vector base configuration lists these strict properties:
+        // Mid Bars (X: 280, 600): Top Y = 240, Height = 480 (Static center at Y = 480)
+        // Center Bar (X: 440): Top Y = 80, Height = 800 (Static center at Y = 480)
+        // Extreme Bars (X: 120, 760): Top Y = 400, Height = 160 (Static center at Y = 480)
+
+        val centerY = 480f * scaleY
+
+        // Mid bars stay completely static at height 480
+        val midBarHeight = 480f * scaleY
+
+        // Center bar decreases with time (from 800 down to 240)
+        val centerBarHeight = if (isRecording) {
+            (800f - (560f * animationProgress)) * scaleY
+        } else {
+            800f * scaleY
+        }
+
+        // Extreme bars increase at the exact same time (from 160 up to 480)
+        val extremeBarHeight = if (isRecording) {
+            (160f + (320f * animationProgress)) * scaleY
+        } else {
+            160f * scaleY
+        }
+
+        // --- DRAW PATTERNS MATRICES ---
+
+        // 1. Extreme Left (Base X: 120, Y: 400)
+        drawRect(
+            color = color,
+            topLeft = Offset(120f * scaleX, centerY - (extremeBarHeight / 2f)),
+            size = Size(barWidth, extremeBarHeight)
+        )
+
+        // 2. Mid Left (Base X: 280, Y: 240)
+        drawRect(
+            color = color,
+            topLeft = Offset(280f * scaleX, centerY - (midBarHeight / 2f)),
+            size = Size(barWidth, midBarHeight)
+        )
+
+        // 3. Center Bar (Base X: 440, Y: 80)
+        drawRect(
+            color = color,
+            topLeft = Offset(440f * scaleX, centerY - (centerBarHeight / 2f)),
+            size = Size(barWidth, centerBarHeight)
+        )
+
+        // 4. Mid Right (Base X: 600, Y: 240)
+        drawRect(
+            color = color,
+            topLeft = Offset(600f * scaleX, centerY - (midBarHeight / 2f)),
+            size = Size(barWidth, midBarHeight)
+        )
+
+        // 5. Extreme Right (Base X: 760, Y: 400)
+        drawRect(
+            color = color,
+            topLeft = Offset(760f * scaleX, centerY - (extremeBarHeight / 2f)),
+            size = Size(barWidth, extremeBarHeight)
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateEntryBottomSheet(
@@ -376,6 +480,7 @@ fun CreateEntryBottomSheet(
     isRecordingAudio: Boolean,
     startAudioRecording: (Context) -> Unit,
     stopAudioRecording: (Boolean, Context) -> Unit,
+    onMagicWandPress: (String) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -469,8 +574,8 @@ fun CreateEntryBottomSheet(
                     Canvas(modifier = Modifier.size(24.dp)) {
                         drawLine(
                             color = Color.Red,
-                            start = androidx.compose.ui.geometry.Offset(0f, size.height),
-                            end = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                            start = Offset(0f, size.height),
+                            end = Offset(size.width, 0f),
                             strokeWidth = 2.dp.toPx()
                         )
                     }
@@ -498,6 +603,21 @@ fun CreateEntryBottomSheet(
                                 color = MaterialTheme.colorScheme.primary,
                                 shape = CircleShape
                             )
+                    )
+                }
+
+                IconButton(
+                    modifier = Modifier.border(
+                        1.dp,
+                        MaterialTheme.colorScheme.onBackground,
+                        RoundedCornerShape(8.dp)
+                    ),
+                    onClick = { onMagicWandPress(draftState.details) },
+                ) {
+                    Icon(
+                        contentDescription = stringResource(R.string.magic_wand),
+                        painter = painterResource(R.drawable.ic_magic_wand),
+                        tint = MaterialTheme.colorScheme.onBackground,
                     )
                 }
             }
@@ -579,31 +699,46 @@ fun CreateEntryBottomSheet(
             ) {
                 // Left Segment: Packs all mutually exclusive media choice chips cleanly together
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f) // Takes up remaining left-side real estate dynamically
                 ) {
                     if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.PHOTO) {
-                        Button(
+                        IconButton(
+                            modifier = Modifier.border(
+                                1.dp,
+                                MaterialTheme.colorScheme.onBackground,
+                                RoundedCornerShape(8.dp)
+                            ),
                             onClick = {
                                 val file = createTempImageFile(context)
                                 val authority = "${context.packageName}.fileprovider"
                                 val uri = FileProvider.getUriForFile(context, authority, file)
                                 tempPhotoPath = file.absolutePath
                                 cameraLauncher.launch(uri)
-                            }
+                            },
                         ) {
                             // Since we added the precise "X" close button above, we can simplify this text to just "Photo"
-                            Text(
-                                text = when {
+                            Icon(
+                                contentDescription = when {
                                     draftState.capturedMediaPath != null -> stringResource(R.string.retake_photo)
                                     else -> stringResource(R.string.photo)
-                                }
+                                },
+                                painter = when {
+                                    draftState.capturedMediaPath != null -> painterResource(R.drawable.ic_refresh)
+                                    else -> painterResource(R.drawable.ic_photo_camera)
+                                },
+                                tint = MaterialTheme.colorScheme.onBackground,
                             )
                         }
                     }
 
                     if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.VIDEO) {
-                        Button(
+                        IconButton(
+                            modifier = Modifier.border(
+                                1.dp,
+                                MaterialTheme.colorScheme.onBackground,
+                                RoundedCornerShape(8.dp)
+                            ),
                             onClick = {
                                 val file = createTempVideoFile(context)
                                 val authority = "${context.packageName}.fileprovider"
@@ -613,17 +748,27 @@ fun CreateEntryBottomSheet(
                                 videoLauncher.launch(uri)
                             }
                         ) {
-                            Text(
-                                text = when {
+                            Icon(
+                                contentDescription = when {
                                     draftState.capturedMediaPath != null -> stringResource(R.string.retake_video)
                                     else -> stringResource(R.string.video)
-                                }
+                                },
+                                painter = when {
+                                    draftState.capturedMediaPath != null -> painterResource(R.drawable.ic_refresh)
+                                    else -> painterResource(R.drawable.ic_video_camera)
+                                },
+                                tint = MaterialTheme.colorScheme.onBackground,
                             )
                         }
                     }
 
                     if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.AUDIO) {
-                        Button(
+                        IconButton(
+                            modifier = Modifier.border(
+                                1.dp,
+                                if (isRecordingAudio) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                RoundedCornerShape(8.dp)
+                            ),
                             onClick = {
                                 if (isRecordingAudio) {
                                     stopAudioRecording(false, context)
@@ -639,19 +784,25 @@ fun CreateEntryBottomSheet(
                                         permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                     }
                                 }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isRecordingAudio) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                            )
+                            }
                         ) {
-                            // The button label text changes state interactively
-                            Text(
-                                text = when {
-                                    isRecordingAudio -> stringResource(R.string.stop_recording)
-                                    draftState.capturedMediaPath != null -> stringResource(R.string.retake_audio)
-                                    else -> stringResource(R.string.audio)
-                                }
-                            )
+                            if (isRecordingAudio) {
+                                AudioRecordingIcon(true, color = MaterialTheme.colorScheme.error)
+                            } else {
+                                Icon(
+                                    contentDescription = when {
+//                                        isRecordingAudio -> stringResource(R.string.stop_recording)
+                                        draftState.capturedMediaPath != null -> stringResource(R.string.retake_audio)
+                                        else -> stringResource(R.string.audio)
+                                    },
+                                    painter = when {
+//                                        isRecordingAudio -> painterResource(R.drawable.ic_recording_audio)
+                                        draftState.capturedMediaPath != null -> painterResource(R.drawable.ic_refresh)
+                                        else -> painterResource(R.drawable.ic_record_audio)
+                                    },
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
@@ -673,86 +824,175 @@ fun CreateEntryBottomSheet(
 
 @Composable
 fun MarkdownText(text: String, style: TextStyle, color: Color) {
-    val annotatedString = remember(text) {
-        buildAnnotatedString {
-            val lines = text.split("\n")
+    val uriHandler = LocalUriHandler.current
 
-            lines.forEachIndexed { index, line ->
-                when {
-                    // --- HEADER SUPPORT (# Text) ---
-                    line.startsWith("# ") -> {
-                        withStyle(
-                            style = SpanStyle(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = (style.fontSize.value + 4).sp
-                            )
-                        ) {
-                            parseInlineLinks(line.removePrefix("# "))
+    // Split the text block into structural content rows
+    val lines = remember(text) { text.split("\n") }
+
+    // Regex layout to reliably identify our specialized magic wand card token structure
+    val cardRegex =
+        remember { """^\[card]\(url=(.*?)\|title=(.*?)\|desc=(.*?)\|img=(.*?)\)$""".toRegex() }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        lines.forEach { line ->
+            val cardMatch = cardRegex.matchEntire(line.trim())
+
+            if (cardMatch != null) {
+                // --- RICH DATA MEDIA CARD ROW ---
+                val url = cardMatch.groups[1]?.value.orEmpty()
+                val title = cardMatch.groups[2]?.value.orEmpty()
+                val desc = cardMatch.groups[3]?.value.orEmpty()
+                val imgUrl = cardMatch.groups[4]?.value.orEmpty()
+
+                LinkPreviewCard(
+                    url = url,
+                    title = title,
+                    description = desc,
+                    imageUrl = imgUrl,
+                    onCardClick = { uriHandler.openUri(url) }
+                )
+            } else {
+                // --- STANDARD MARKDOWN TEXT ROW RUN ---
+                val annotatedString = buildAnnotatedString {
+                    when {
+                        // --- HEADER SUPPORT (# Text) ---
+                        line.startsWith("# ") -> {
+                            withStyle(
+                                style = SpanStyle(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = (style.fontSize.value + 4).sp
+                                )
+                            ) {
+                                parseInlineLinks(line.removePrefix("# "))
+                            }
                         }
-                    }
-
-                    // --- LIST SUPPORT (- Text) ---
-                    line.startsWith("- ") -> {
-                        withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
-                            // Prefix with a clean bullet character symbol
-                            append("•  ")
-                            parseInlineLinks(line.removePrefix("- "))
+                        // --- LIST SUPPORT (- Text) ---
+                        line.startsWith("- ") -> {
+                            withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
+                                append("•  ")
+                                parseInlineLinks(line.removePrefix("- "))
+                            }
                         }
-                    }
-
-                    // --- LIST SUPPORT (* Text) ---
-                    line.startsWith("* ") -> {
-                        withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
-                            // Prefix with a clean bullet character symbol
-                            append("•  ")
-                            parseInlineLinks(line.removePrefix("* "))
+                        // --- LIST SUPPORT (* Text) ---
+                        line.startsWith("* ") -> {
+                            withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
+                                append("•  ")
+                                parseInlineLinks(line.removePrefix("* "))
+                            }
                         }
-                    }
-
-                    // --- LIST SUPPORT (+ Text) ---
-                    line.startsWith("+ ") -> {
-                        withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
-                            // Prefix with a clean bullet character symbol
-                            append("•  ")
-                            parseInlineLinks(line.removePrefix("+ "))
+                        // --- LIST SUPPORT (+ Text) ---
+                        line.startsWith("+ ") -> {
+                            withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
+                                // Prefix with a clean bullet character symbol
+                                append("•  ")
+                                parseInlineLinks(line.removePrefix("+ "))
+                            }
                         }
-                    }
-
-                    // --- STANDARD LINE ---
-                    else -> {
-                        parseInlineLinks(line)
+                        // --- STANDARD LINE ---
+                        else -> {
+                            parseInlineLinks(line)
+                        }
                     }
                 }
 
-                // Add a line break for all elements except the final line block
-                if (index < lines.lastIndex) {
-                    append("\n")
+                if (annotatedString.isNotEmpty()) {
+                    BasicText(
+                        text = annotatedString,
+                        style = style.copy(color = color),
+                        modifier = Modifier.padding(
+                            vertical = if (line.startsWith("- ")
+                                or line.startsWith("* ")
+                                or line.startsWith("+ ")
+                            ) 2.dp else 0.dp
+                        )
+                    )
                 }
             }
         }
     }
+}
 
-    // Checking if any line is a list item to dynamically add padding block elements
-    val hasList = remember(text) { text.lines().any { it.startsWith("- ") } }
+@Composable
+private fun LinkPreviewCard(
+    url: String,
+    title: String,
+    description: String,
+    imageUrl: String,
+    onCardClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onCardClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+        ) {
+            // Render the scraped web image token on the left if it exists safely
+            if (imageUrl.isNotEmpty()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = "Link Preview Thumbnail",
+                    modifier = Modifier
+                        .width(96.dp)
+                        .fillMaxHeight(),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
-    BasicText(
-        text = annotatedString,
-        style = style.copy(color),
-        modifier = Modifier.padding(vertical = if (hasList) 4.dp else 0.dp)
-    )
+            // Title and Description text details on the right side block layout
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = url,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textDecoration = TextDecoration.Underline
+                )
+            }
+        }
+    }
 }
 
 /**
- * Regex-driven parser to extract and render Markdown link syntaxes cleanly inline.
+ * Handles checking fallback named Markdown hooks within standard lines
  */
 private fun AnnotatedString.Builder.parseInlineLinks(text: String) {
-    // Matches explicit brackets [Title](URL) or raw bracket hooks <URL>
     val linkRegex = """(\[([^]]+)]\((https?://[^\s)]+)\))|(<(https?://[^\s>]+)>)""".toRegex()
-
     var lastIndex = 0
 
     linkRegex.findAll(text).forEach { matchResult ->
-        // Append any plain leading text preceding the regex match point
         if (matchResult.range.first > lastIndex) {
             appendLineText(text.substring(lastIndex, matchResult.range.first))
         }
@@ -763,13 +1003,12 @@ private fun AnnotatedString.Builder.parseInlineLinks(text: String) {
         val urlTarget =
             if (isNamedLink) matchResult.groups[3]!!.value else matchResult.groups[5]!!.value
 
-        // Apply distinct Link Annotation architecture directly inline
         withLink(
             link = LinkAnnotation.Url(
                 url = urlTarget,
-                styles = androidx.compose.ui.text.TextLinkStyles(
+                styles = TextLinkStyles(
                     style = SpanStyle(
-                        color = Color(0xFF2196F3), // Sleek hyperlink blue color highlight
+                        color = Color(0xFF2196F3),
                         textDecoration = TextDecoration.Underline
                     )
                 )
@@ -781,7 +1020,6 @@ private fun AnnotatedString.Builder.parseInlineLinks(text: String) {
         lastIndex = matchResult.range.last + 1
     }
 
-    // Append any remaining plain trailing text blocks
     if (lastIndex < text.length) {
         appendLineText(text.substring(lastIndex))
     }

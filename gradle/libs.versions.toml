@@ -1,20 +1,22 @@
 [versions]
-agp = "9.2.1"
+agp = "9.3.0"
 coreKtx = "1.19.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
-lifecycleRuntimeKtx = "2.10.0"
+lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
-kotlin = "2.4.0"
-composeBom = "2026.05.01"
-foundationLayout = "1.11.2"
+kotlin = "2.4.10"
+composeBom = "2026.06.01"
+foundationLayout = "1.11.4"
 ksp = "2.3.8"
-hilt = "2.59.2"
+hilt = "2.60.1"
 roomVersion = "2.8.4"
 coilVersion = "3.5.0"
 splashscreenVersion = "1.2.0"
 media3Version = "1.10.1"
+okHttpVersion = "5.4.0"
+jsoupVersion = "1.22.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -42,6 +44,8 @@ room-compiler = { group = "androidx.room", name = "room-compiler", version.ref =
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomVersion" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coilVersion" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coilVersion" }
+square-okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okHttpVersion" }
+jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoupVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

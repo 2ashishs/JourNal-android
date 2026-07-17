@@ -11,3 +11,11 @@
 - Updated move (drag) entry logic for reverse order in `JournalViewModel`.
 - MarkDownText support for lists, starting with `* ` and `+ `
 - MarkDownText support for inline links `<URL>` and `[URL Text](URL)`
+- Magic Wand button to replace weblinks with `LinkPreviewCard` support in MarkDownText
+- Upgrade AGP dependency from 9.2.1 to 9.3.0
+- Upgrade Gradle version to 9.5.0
+- Animated audio recording button
+- Update Audio, Video, Photo icon UX
+- Added `okHttp` (for networking) and `jsoup` (for dom parsing of html/xml)
+- Link & YouTube `EntryType` support (needs fixes)
+- List `EntryType` support (for list in md)

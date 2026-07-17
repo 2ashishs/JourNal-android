@@ -2,8 +2,6 @@
 
 ## 🛠️ Features
 
-- Link & YouTube `EntryType` support
-- List `EntryType` support (optional)
 - Import / Export entries functionality 
 - Settings Screen
 
