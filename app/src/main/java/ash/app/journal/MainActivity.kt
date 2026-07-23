@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
         // Extract instances from custom Application scope container
         val appContainer = application as JournalApplication
         val repository = appContainer.repository
-        val linkRepository = appContainer.linkPreviewRepository
+        val linkRepository = appContainer.linkMetadataRepository
 
         // Factory container pattern to instantiate Custom ViewModel Parameter signatures cleanly
         val viewModelFactory = object : ViewModelProvider.Factory {

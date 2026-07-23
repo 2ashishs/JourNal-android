@@ -17,5 +17,8 @@
 - Animated audio recording button
 - Update Audio, Video, Photo icon UX
 - Added `okHttp` (for networking) and `jsoup` (for dom parsing of html/xml)
-- Link & YouTube `EntryType` support (needs fixes)
+- Link & YouTube `EntryType` support
 - List `EntryType` support (for list in md)
+- Added `LinkPreviewCard` to display a card for links, using custom Markdown syntax
+- Added LinkMetaData table to save and retrieve metadata of links. Added it to JournalDatabase. Thus, db migration to version 3.
+- Max 2 lines to display title in rows as well as details screen

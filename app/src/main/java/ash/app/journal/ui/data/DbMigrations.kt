@@ -49,3 +49,21 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL("ALTER TABLE journal_entries_new RENAME TO journal_entries")
     }
 }
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Create the new table strictly in this migration
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `link_metadata` (
+                `url` TEXT NOT NULL,
+                `title` TEXT NOT NULL,
+                `description` TEXT NOT NULL,
+                `imageUrl` TEXT NOT NULL,
+                `fetchedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`url`)
+            )
+            """.trimIndent()
+        )
+    }
+}

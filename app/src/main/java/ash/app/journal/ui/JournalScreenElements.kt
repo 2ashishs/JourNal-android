@@ -124,6 +124,7 @@ import ash.app.journal.ui.models.EntryColorTag
 import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
+import ash.app.journal.ui.models.LinkMetadataEntity
 import ash.app.journal.ui.theme.JournalTheme
 import ash.app.journal.ui.utils.DragDropState
 import coil3.compose.AsyncImage
@@ -253,6 +254,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
     selectedEntryForDetail?.let { entry ->
         DetailEntryBottomSheet(
             entry = entry,
+            viewModel = viewModel,
             onDismiss = { selectedEntryForDetail = null },
             onEditClick = {
                 viewModel.startEditing(entry)
@@ -353,6 +355,8 @@ fun JournalRowItem(
                 text = entry.title.ifBlank { stringResource(R.string.untitled_entry) },
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .weight(1f)
                     .padding(24.dp)
@@ -823,15 +827,17 @@ fun CreateEntryBottomSheet(
 }
 
 @Composable
-fun MarkdownText(text: String, style: TextStyle, color: Color) {
+fun MarkdownText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    metadataMap: Map<String, LinkMetadataEntity> = emptyMap()
+) {
     val uriHandler = LocalUriHandler.current
-
-    // Split the text block into structural content rows
     val lines = remember(text) { text.split("\n") }
 
-    // Regex layout to reliably identify our specialized magic wand card token structure
-    val cardRegex =
-        remember { """^\[card]\(url=(.*?)\|title=(.*?)\|desc=(.*?)\|img=(.*?)\)$""".toRegex() }
+    // Matches [card](url=https://...)
+    val cardRegex = remember { """^\[card\]\(url=(.*?)\)$""".toRegex() }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -841,27 +847,31 @@ fun MarkdownText(text: String, style: TextStyle, color: Color) {
             val cardMatch = cardRegex.matchEntire(line.trim())
 
             if (cardMatch != null) {
-                // --- RICH DATA MEDIA CARD ROW ---
                 val url = cardMatch.groups[1]?.value.orEmpty()
-                val title = cardMatch.groups[2]?.value.orEmpty()
-                val desc = cardMatch.groups[3]?.value.orEmpty()
-                val imgUrl = cardMatch.groups[4]?.value.orEmpty()
+                val metadata = metadataMap[url]
 
-                LinkPreviewCard(
-                    url = url,
-                    title = title,
-                    description = desc,
-                    imageUrl = imgUrl,
-                    onCardClick = { uriHandler.openUri(url) }
-                )
+                if (metadata != null) {
+                    LinkPreviewCard(
+                        url = metadata.url,
+                        title = metadata.title,
+                        description = metadata.description,
+                        imageUrl = metadata.imageUrl,
+                        onCardClick = { uriHandler.openUri(metadata.url) }
+                    )
+                } else {
+                    // While loading or if DB missing, render as clean clickable link
+                    BasicText(
+                        text = buildAnnotatedString { parseInlineLinks("<$url>") },
+                        style = style.copy(color = color)
+                    )
+                }
             } else {
-                // --- STANDARD MARKDOWN TEXT ROW RUN ---
+                // --- STANDARD MARKDOWN TEXT ROW RUN ---[cite: 2]
                 val annotatedString = buildAnnotatedString {
                     when {
-                        // --- HEADER SUPPORT (# Text) ---
                         line.startsWith("# ") -> {
                             withStyle(
-                                style = SpanStyle(
+                                SpanStyle(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = (style.fontSize.value + 4).sp
                                 )
@@ -869,32 +879,17 @@ fun MarkdownText(text: String, style: TextStyle, color: Color) {
                                 parseInlineLinks(line.removePrefix("# "))
                             }
                         }
-                        // --- LIST SUPPORT (- Text) ---
-                        line.startsWith("- ") -> {
-                            withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
+
+                        line.startsWith("- ") || line.startsWith("* ") || line.startsWith("+ ") -> {
+                            withStyle(SpanStyle(fontWeight = FontWeight.Normal)) {
                                 append("•  ")
-                                parseInlineLinks(line.removePrefix("- "))
+                                parseInlineLinks(
+                                    line.removePrefix("- ").removePrefix("* ").removePrefix("+ ")
+                                )
                             }
                         }
-                        // --- LIST SUPPORT (* Text) ---
-                        line.startsWith("* ") -> {
-                            withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
-                                append("•  ")
-                                parseInlineLinks(line.removePrefix("* "))
-                            }
-                        }
-                        // --- LIST SUPPORT (+ Text) ---
-                        line.startsWith("+ ") -> {
-                            withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
-                                // Prefix with a clean bullet character symbol
-                                append("•  ")
-                                parseInlineLinks(line.removePrefix("+ "))
-                            }
-                        }
-                        // --- STANDARD LINE ---
-                        else -> {
-                            parseInlineLinks(line)
-                        }
+
+                        else -> parseInlineLinks(line)
                     }
                 }
 
@@ -903,9 +898,9 @@ fun MarkdownText(text: String, style: TextStyle, color: Color) {
                         text = annotatedString,
                         style = style.copy(color = color),
                         modifier = Modifier.padding(
-                            vertical = if (line.startsWith("- ")
-                                or line.startsWith("* ")
-                                or line.startsWith("+ ")
+                            vertical = if (line.startsWith("- ") || line.startsWith("* ") || line.startsWith(
+                                    "+ "
+                                )
                             ) 2.dp else 0.dp
                         )
                     )
@@ -945,7 +940,7 @@ private fun LinkPreviewCard(
                     model = imageUrl,
                     contentDescription = "Link Preview Thumbnail",
                     modifier = Modifier
-                        .width(96.dp)
+                        .width(128.dp)
                         .fillMaxHeight(),
                     contentScale = ContentScale.Crop
                 )
@@ -1064,11 +1059,20 @@ private fun AnnotatedString.Builder.appendLineText(lineText: String) {
 @Composable
 fun DetailEntryBottomSheet(
     entry: JournalEntry,
+    viewModel: JournalViewModel,
     onDismiss: () -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onShareClick: () -> Unit
 ) {
+    // Collect the dynamic metadata map from the ViewModel state
+    val metadataMap by viewModel.linkMetadataState.collectAsState()
+
+    // Load DB metadata whenever this entry opens or changes
+    LaunchedEffect(entry.id) {
+        viewModel.loadMetadataForEntry(entry.details)
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface
@@ -1088,7 +1092,9 @@ fun DetailEntryBottomSheet(
                 Text(
                     text = entry.title,
                     style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
 
                 HorizontalDivider(
@@ -1110,7 +1116,8 @@ fun DetailEntryBottomSheet(
                     MarkdownText(
                         text = entryDetails,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        metadataMap = metadataMap,
                     )
                 }
 
