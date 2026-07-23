@@ -5,8 +5,9 @@ import androidx.room.Room
 import ash.app.journal.ui.data.JournalDatabase
 import ash.app.journal.ui.data.JournalRepository
 import ash.app.journal.ui.data.JournalRepositoryImpl
-import ash.app.journal.ui.data.LinkPreviewRepository
+import ash.app.journal.ui.data.LinkMetadataRepository
 import ash.app.journal.ui.data.MIGRATION_1_2
+import ash.app.journal.ui.data.MIGRATION_2_3
 import okhttp3.OkHttpClient
 
 class JournalApplication : Application() {
@@ -18,7 +19,10 @@ class JournalApplication : Application() {
             JournalDatabase::class.java,
             "journal_database"
         )
-            .addMigrations(MIGRATION_1_2) //Db migration: changed `hexColor` to `colorTag`
+            .addMigrations(
+                MIGRATION_1_2, // changed `hexColor` to `colorTag` in `journal_entries`
+                MIGRATION_2_3 // added table `link_metadata`
+            )
             .build()
     }
 
@@ -35,8 +39,8 @@ class JournalApplication : Application() {
     }
 
     // 3. Link Preview Repository Instance
-    val linkPreviewRepository: LinkPreviewRepository by lazy {
-        LinkPreviewRepository(okHttpClient)
+    val linkMetadataRepository: LinkMetadataRepository by lazy {
+        LinkMetadataRepository(okHttpClient, linkMetadataDao = database.linkMetadataDao())
     }
 
 }
