@@ -308,6 +308,9 @@ class JournalViewModel(
         repository.updateEntries(updatedList)
     }
 
+    fun isMediaFileAvailable(entry: JournalEntry) =
+        entry.mediaPath != null && File(entry.mediaPath).exists()
+
     // Triggered when the user clicks "Edit" from either the Home menu or Detail Sheet
     fun startEditing(entry: JournalEntry) {
         _draftState.update {
@@ -316,8 +319,8 @@ class JournalViewModel(
                 title = entry.title,
                 details = entry.details,
                 selectedColorTag = entry.colorTag,
-                capturedMediaPath = entry.mediaPath,
-                capturedMediaType = entry.mediaType,
+                capturedMediaPath = if (isMediaFileAvailable(entry)) entry.mediaPath else null,
+                capturedMediaType = if (isMediaFileAvailable(entry)) entry.mediaType else EntryMediaType.TEXT,
             )
         }
     }
@@ -405,6 +408,17 @@ class JournalViewModel(
                 val cachedMap = linkRepository.getMetadataListForUrls(urls)
                 _linkMetadataState.update { current -> current + cachedMap }
             }
+        }
+    }
+
+    fun removeMissingMediaFromEntry(entry: JournalEntry) {
+        viewModelScope.launch {
+            val updatedEntry = entry.copy(
+                mediaPath = null,
+                mediaType = EntryMediaType.TEXT
+            )
+            // Update entry in Room Database
+            repository.updateEntry(updatedEntry)
         }
     }
 

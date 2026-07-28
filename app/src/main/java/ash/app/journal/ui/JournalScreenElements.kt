@@ -65,6 +65,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -139,7 +140,8 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
     val entries by viewModel.journalEntries.collectAsState()
     val draftState by viewModel.draftState.collectAsState()
 
-    var selectedEntryForDetail by remember { mutableStateOf<JournalEntry?>(null) }
+    var selectedEntryId by remember { mutableStateOf<Long?>(null) }
+    val selectedEntryForDetail = entries.find { it.id == selectedEntryId }
 
     val lazyListState = rememberLazyListState()
     val dragDropState = rememberDragDropState(lazyListState = lazyListState) { from, to ->
@@ -206,7 +208,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                     ) {
                         JournalRowItem(
                             entry = entry,
-                            onClick = { selectedEntryForDetail = entry }
+                            onClick = { selectedEntryId = entry.id }
                         )
                     }
                 }
@@ -255,15 +257,15 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
         DetailEntryBottomSheet(
             entry = entry,
             viewModel = viewModel,
-            onDismiss = { selectedEntryForDetail = null },
+            onDismiss = { selectedEntryId = null },
             onEditClick = {
                 viewModel.startEditing(entry)
-                selectedEntryForDetail = null
+                selectedEntryId = null
                 viewModel.setCreateSheetVisibility(true)
             },
             onDeleteClick = {
                 viewModel.deleteEntry(entry)
-                selectedEntryForDetail = null
+                selectedEntryId = null
             },
             onShareClick = {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -271,20 +273,21 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                     putExtra(Intent.EXTRA_SUBJECT, entry.title)
                     putExtra(Intent.EXTRA_TEXT, entry.details)
 
-                    if (entry.mediaPath != null) {
+                    if (viewModel.isMediaFileAvailable(entry)) {
                         type = when (entry.mediaType) {
                             EntryMediaType.PHOTO -> "image/*"
                             EntryMediaType.VIDEO -> "video/*"
                             EntryMediaType.AUDIO -> "audio/*"
                             EntryMediaType.TEXT -> "text/plain"
                         }
-                        val mediaFile = File(entry.mediaPath)
+                        val mediaFile = File(entry.mediaPath!!)
                         val authority = "${context.packageName}.fileprovider"
                         val mediaUri = FileProvider.getUriForFile(context, authority, mediaFile)
                         putExtra(Intent.EXTRA_STREAM, mediaUri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     } else {
                         type = "text/plain"
+                        if (entry.details.isBlank()) putExtra(Intent.EXTRA_TEXT, entry.title)
                     }
                 }
                 val chooserIntent = Intent.createChooser(
@@ -1122,62 +1125,70 @@ fun DetailEntryBottomSheet(
                 }
 
                 entry.mediaPath?.let { path ->
-                    when (entry.mediaType) {
-                        EntryMediaType.PHOTO -> {
-                            var isImageFullscreen by remember { mutableStateOf(false) }
+                    if (viewModel.isMediaFileAvailable(entry)) {
+                        when (entry.mediaType) {
+                            EntryMediaType.PHOTO -> {
+                                var isImageFullscreen by remember { mutableStateOf(false) }
 
-                            Image(
-                                painter = rememberAsyncImagePainter(File(path)),
-                                contentDescription = entry.title,
-                                contentScale = ContentScale.FillWidth,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .pointerInput(Unit) {
-                                        detectTapGestures(onDoubleTap = {
-                                            isImageFullscreen = true
-                                        })
-                                    }
-                            )
+                                Image(
+                                    painter = rememberAsyncImagePainter(File(path)),
+                                    contentDescription = entry.title,
+                                    contentScale = ContentScale.FillWidth,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .pointerInput(Unit) {
+                                            detectTapGestures(onDoubleTap = {
+                                                isImageFullscreen = true
+                                            })
+                                        }
+                                )
 
-                            if (isImageFullscreen) {
-                                Dialog(
-                                    onDismissRequest = { isImageFullscreen = false },
-                                    properties = DialogProperties(usePlatformDefaultWidth = false)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(Color.Black)
-                                            .pointerInput(Unit) {
-                                                detectTapGestures(onDoubleTap = {
-                                                    isImageFullscreen = false
-                                                })
-                                            },
-                                        contentAlignment = Alignment.Center
+                                if (isImageFullscreen) {
+                                    Dialog(
+                                        onDismissRequest = { isImageFullscreen = false },
+                                        properties = DialogProperties(usePlatformDefaultWidth = false)
                                     ) {
-                                        Image(
-                                            painter = rememberAsyncImagePainter(File(path)),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Fit, // Fits image inside boundaries without clipping details
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color.Black)
+                                                .pointerInput(Unit) {
+                                                    detectTapGestures(onDoubleTap = {
+                                                        isImageFullscreen = false
+                                                    })
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Image(
+                                                painter = rememberAsyncImagePainter(File(path)),
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Fit, // Fits image inside boundaries without clipping details
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        EntryMediaType.VIDEO -> {
-                            LoopingVideoPlayer(videoPath = path)
-                        }
+                            EntryMediaType.VIDEO -> {
+                                LoopingVideoPlayer(videoPath = path)
+                            }
 
-                        EntryMediaType.AUDIO -> {
-                            AudioPlayerRegion(audioPath = path)
-                        }
+                            EntryMediaType.AUDIO -> {
+                                AudioPlayerRegion(audioPath = path)
+                            }
 
-                        EntryMediaType.TEXT -> {
-                            // Standard text layout flows cleanly with zero extra attachment
+                            EntryMediaType.TEXT -> {
+                                // Standard text layout flows cleanly with zero extra attachment
+                            }
                         }
+                    } else {
+                        // --- FALLBACK WHEN FILE IS DELETED/CLEARED ---
+                        MissingMediaCard(
+                            mediaType = entry.mediaType,
+                            onClearMediaTag = { viewModel.removeMissingMediaFromEntry(entry) }
+                        )
                     }
                 }
             }
@@ -1238,6 +1249,62 @@ fun DetailEntryBottomSheet(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MissingMediaCard(
+    mediaType: EntryMediaType,
+    onClearMediaTag: () -> Unit
+) {
+    val mediaTypeName = when (mediaType) {
+        EntryMediaType.PHOTO -> "Photo"
+        EntryMediaType.VIDEO -> "Video"
+        EntryMediaType.AUDIO -> "Audio file"
+        EntryMediaType.TEXT -> "Media"
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_close), // error / warning icon
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+                Text(
+                    text = "$mediaTypeName file has been deleted or moved.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+
+            TextButton(onClick = onClearMediaTag) {
+                Text(
+                    text = "Clear $mediaTypeName tag",
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

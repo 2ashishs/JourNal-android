@@ -22,5 +22,8 @@ interface JournalDao {
     suspend fun deleteEntry(entry: JournalEntry)
 
     @Update
+    suspend fun updateEntry(entry: JournalEntry)
+
+    @Update
     suspend fun updateEntries(entries: List<JournalEntry>)
 }
