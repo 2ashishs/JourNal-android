@@ -8,6 +8,7 @@ import ash.app.journal.ui.data.JournalRepositoryImpl
 import ash.app.journal.ui.data.LinkMetadataRepository
 import ash.app.journal.ui.data.MIGRATION_1_2
 import ash.app.journal.ui.data.MIGRATION_2_3
+import ash.app.journal.ui.data.MIGRATION_3_4
 import okhttp3.OkHttpClient
 
 class JournalApplication : Application() {
@@ -21,7 +22,8 @@ class JournalApplication : Application() {
         )
             .addMigrations(
                 MIGRATION_1_2, // changed `hexColor` to `colorTag` in `journal_entries`
-                MIGRATION_2_3 // added table `link_metadata`
+                MIGRATION_2_3, // added table `link_metadata`
+                MIGRATION_3_4, // dropped `orderIndex` from `journal_entries`
             )
             .build()
     }

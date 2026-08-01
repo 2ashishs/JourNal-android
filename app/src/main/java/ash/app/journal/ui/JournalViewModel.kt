@@ -11,12 +11,12 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ash.app.journal.ui.data.JournalRepository
-import ash.app.journal.ui.models.LinkMetadataEntity
 import ash.app.journal.ui.data.LinkMetadataRepository
 import ash.app.journal.ui.models.EntryColorTag
 import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
+import ash.app.journal.ui.models.LinkMetadataEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -234,12 +234,7 @@ class JournalViewModel(
 
         viewModelScope.launch {
             if (currentDraft.editingEntryId != null) {
-                // --- EDIT MODE: Fetch the existing entry configuration to preserve order index ---
-                val existingList = journalEntries.value
-                val existingEntry =
-                    existingList.firstOrNull { it.id == currentDraft.editingEntryId }
-                val currentOrderIndex = existingEntry?.orderIndex ?: 0
-
+                // --- EDIT ENTRY MODE ---
                 val updatedEntry = JournalEntry(
                     id = currentDraft.editingEntryId, // Matching ID triggers Room's REPLACE / Update mechanism
                     title = finalTitle,
@@ -248,7 +243,6 @@ class JournalViewModel(
                     mediaPath = currentDraft.capturedMediaPath,
                     mediaType = currentDraft.capturedMediaType,
                     timestamp = System.currentTimeMillis(),
-                    orderIndex = currentOrderIndex
                 )
                 repository.insertEntry(updatedEntry)
             } else {
@@ -260,11 +254,9 @@ class JournalViewModel(
                     mediaPath = currentDraft.capturedMediaPath,
                     mediaType = currentDraft.capturedMediaType,
                     timestamp = System.currentTimeMillis(),
-                    orderIndex = journalEntries.value.size
                 )
                 repository.insertEntry(newEntry)
             }
-
             // Clear state back to default after saving
             _draftState.value = JournalDraftState()
         }
@@ -273,39 +265,7 @@ class JournalViewModel(
     fun deleteEntry(entry: JournalEntry) {
         viewModelScope.launch {
             repository.deleteEntry(entry)
-            // Optional: After deletion, re-index remaining entries so orderIndex stays sequential
-            reindexEntries()
         }
-    }
-
-    fun moveEntry(fromIndex: Int, toIndex: Int) {
-        val currentList = journalEntries.value.toMutableList()
-        if (fromIndex in currentList.indices && toIndex in currentList.indices) {
-            // Swap positions in the local list copy
-            val movedItem = currentList.removeAt(fromIndex)
-            currentList.add(toIndex, movedItem)
-
-            val maxIndex = currentList.size - 1
-            // Update the orderIndex property of each item based on its new position
-            val updatedList = currentList.mapIndexed { index, item ->
-                // To display entries in DESC orderIndex. For ASC orderIndex, `invertedIndex = index`
-                val invertedIndex = maxIndex - index
-                item.copy(orderIndex = invertedIndex)
-            }
-
-            // Persist the batch update to Room DB via repository
-            viewModelScope.launch {
-                repository.updateEntries(updatedList)
-            }
-        }
-    }
-
-    private suspend fun reindexEntries() {
-        val currentList = journalEntries.value
-        val updatedList = currentList.mapIndexed { index, item ->
-            item.copy(orderIndex = index)
-        }
-        repository.updateEntries(updatedList)
     }
 
     fun isMediaFileAvailable(entry: JournalEntry) =

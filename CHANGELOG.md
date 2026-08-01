@@ -22,3 +22,9 @@
 - Added `LinkPreviewCard` to display a card for links, using custom Markdown syntax
 - Added LinkMetaData table to save and retrieve metadata of links. Added it to JournalDatabase. Thus, db migration to version 3.
 - Max 2 lines to display title in rows as well as details screen
+- Order entries by `timestamp`
+- Drop `orderIndex` field in `JournalEntry` class and as column in table.
+- DbMigrations to drop `orderIndex`
+- Removed `DragDropState` helper class
+- Simpler smoother list for `MainJournalScreen` with order indexing removed.
+- Changes in `JournalViewModel` and `JournalScreenElements` to remove `orderIndex`

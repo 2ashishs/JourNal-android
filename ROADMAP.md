@@ -2,12 +2,15 @@
 
 ## 🛠️ Features
 
+- Screen Lock for Privacy
+- Pinch and Zoom for Images / Videos
 - Import / Export entries functionality 
 - Settings Screen
 
 
 ## 🎨️ Enhancements
 
+- List and Link subtypes for Entries
 - Move all colors to a single file, specifically remove all `Color.` references in any file.
 - Landscape mode possibility
 

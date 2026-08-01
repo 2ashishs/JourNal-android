@@ -34,7 +34,7 @@ class LinkMetadataRepository(
             try {
                 okHttpClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@withContext null
-                    val html = response.body?.string() ?: return@withContext null
+                    val html = response.body.string() //?: return@withContext null
 
                     val document = Jsoup.parse(html, targetUrl)
 

@@ -21,7 +21,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,8 +37,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -76,7 +74,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,7 +81,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -127,7 +123,6 @@ import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.models.LinkMetadataEntity
 import ash.app.journal.ui.theme.JournalTheme
-import ash.app.journal.ui.utils.DragDropState
 import coil3.compose.AsyncImage
 import coil3.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.delay
@@ -144,12 +139,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
     val selectedEntryForDetail = entries.find { it.id == selectedEntryId }
 
     val lazyListState = rememberLazyListState()
-    val dragDropState = rememberDragDropState(lazyListState = lazyListState) { from, to ->
-        viewModel.moveEntry(from, to)
-    }
-
     val context = LocalContext.current
-
     val shareViaTitle = stringResource(R.string.share_entry_via)
 
     Scaffold(
@@ -171,19 +161,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
         ) {
             LazyColumn(
                 state = lazyListState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = { offset -> dragDropState.onDragStart(offset) },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                dragDropState.onDrag(dragAmount)
-                            },
-                            onDragCancel = { dragDropState.onDragInterrupted() },
-                            onDragEnd = { dragDropState.onDragInterrupted() }
-                        )
-                    },
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     bottom = 100.dp,
                     start = 16.dp,
@@ -192,25 +170,14 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(entries, key = { _, entry -> entry.id }) { index, entry ->
-                    val isCurrentDraggedItem = index == dragDropState.currentIndexOfDraggedItem
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .graphicsLayer {
-                                translationY =
-                                    if (isCurrentDraggedItem) dragDropState.draggedDistance else 0f
-                                scaleX = if (isCurrentDraggedItem) 1.04f else 1.0f
-                                scaleY = if (isCurrentDraggedItem) 1.04f else 1.0f
-                                alpha = if (isCurrentDraggedItem) 0.9f else 1.0f
-                            }
-                    ) {
-                        JournalRowItem(
-                            entry = entry,
-                            onClick = { selectedEntryId = entry.id }
-                        )
-                    }
+                items(
+                    items = entries,
+                    key = { entry -> entry.id }
+                ) { entry ->
+                    JournalRowItem(
+                        entry = entry,
+                        onClick = { selectedEntryId = entry.id }
+                    )
                 }
             }
 
@@ -1293,7 +1260,7 @@ private fun MissingMediaCard(
                     tint = MaterialTheme.colorScheme.error
                 )
                 Text(
-                    text = "$mediaTypeName file has been deleted or moved.",
+                    text = stringResource(R.string.file_has_been_deleted_or_moved, mediaTypeName),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
@@ -1301,7 +1268,7 @@ private fun MissingMediaCard(
 
             TextButton(onClick = onClearMediaTag) {
                 Text(
-                    text = "Clear $mediaTypeName tag",
+                    text = stringResource(R.string.clear_tag, mediaTypeName),
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold
                 )
@@ -1562,15 +1529,4 @@ private fun formatMs(ms: Int): String {
     val seconds = (ms / 1000) % 60
     val minutes = (ms / (1000 * 60)) % 60
     return String.format("%02d:%02d", minutes, seconds)
-}
-
-@Composable
-fun rememberDragDropState(
-    lazyListState: LazyListState,
-    onMove: (Int, Int) -> Unit
-): DragDropState {
-    val currentOnMove by rememberUpdatedState(onMove)
-    return remember(lazyListState) {
-        DragDropState(lazyListState, currentOnMove)
-    }
 }

@@ -67,3 +67,36 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         )
     }
 }
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // 1. Create new table without orderIndex
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `journal_entries_new` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `title` TEXT NOT NULL,
+                `details` TEXT NOT NULL,
+                `colorTag` TEXT NOT NULL,
+                `mediaType` TEXT NOT NULL,
+                `mediaPath` TEXT,
+                `timestamp` INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+
+        // 2. Copy data across
+        db.execSQL(
+            """
+            INSERT INTO `journal_entries_new` (`id`, `title`, `details`, `colorTag`, `mediaType`, `mediaPath`, `timestamp`)
+            SELECT `id`, `title`, `details`, `colorTag`, `mediaType`, `mediaPath`, `timestamp` FROM `journal_entries`
+            """.trimIndent()
+        )
+
+        // 3. Drop old table
+        db.execSQL("DROP TABLE `journal_entries` ")
+
+        // 4. Rename new table
+        db.execSQL("ALTER TABLE `journal_entries_new` RENAME TO `journal_entries` ")
+    }
+}
