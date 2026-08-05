@@ -16,7 +16,6 @@
 
 ## 🐛 Fixes
 
-- The Bottom Sheet "Bounce" Fix: Debugging the Material 3 ModalBottomSheet state machine to prevent that annoying rubber-banding trigger when swiping closed.
 - UI Fixes for "Photo", "Video", "Audio" row
 - Performance: Storage & Battery Usage
 - `lint` integration to detect and fix mistakes

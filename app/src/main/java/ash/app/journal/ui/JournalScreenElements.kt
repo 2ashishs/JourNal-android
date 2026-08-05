@@ -21,6 +21,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +33,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -81,10 +83,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -101,6 +108,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -1037,28 +1045,86 @@ fun DetailEntryBottomSheet(
 ) {
     // Collect the dynamic metadata map from the ViewModel state
     val metadataMap by viewModel.linkMetadataState.collectAsState()
-
     // Load DB metadata whenever this entry opens or changes
     LaunchedEffect(entry.id) {
         viewModel.loadMetadataForEntry(entry.details)
     }
 
+    // Get the device screen height dynamically
+    val windowInfo = LocalWindowInfo.current
+    val density = LocalDensity.current
+    // Calculate 80% of current window height cleanly in DP
+    val maxSheetHeight = with(density) {
+        (windowInfo.containerSize.height * 0.80f).toDp()
+    }
+
+    val preventUpwardBounceConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                return if (available.y < 0f) {
+                    Offset(0f, available.y)
+                } else {
+                    Offset.Zero
+                }
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                return if (available.y < 0f) {
+                    Velocity(0f, available.y)
+                } else {
+                    Velocity.Zero
+                }
+            }
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = null
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(max = maxSheetHeight)
+                .nestedScroll(preventUpwardBounceConnection)
                 .navigationBarsPadding()
         ) {
             // ANCHORED ZONE (Title & Dynamic Divider)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .pointerInput(Unit) {
+                        // Intercept upward drags on the header so they don't bounce the bottom sheet
+                        detectDragGestures { change, dragAmount ->
+                            if (dragAmount.y < 0f) {
+                                change.consume() // Consumes upward drag on header
+                            }
+                        }
+                    }
                     .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // CUSTOM DRAG HANDLE (Lives inside nestedScroll tree)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp, bottom = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(32.dp)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                    )
+                }
+
                 Text(
                     text = entry.title,
                     style = MaterialTheme.typography.headlineSmall,
@@ -1100,7 +1166,7 @@ fun DetailEntryBottomSheet(
                                 Image(
                                     painter = rememberAsyncImagePainter(File(path)),
                                     contentDescription = entry.title,
-                                    contentScale = ContentScale.FillWidth,
+                                    contentScale = ContentScale.Fit,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(8.dp))

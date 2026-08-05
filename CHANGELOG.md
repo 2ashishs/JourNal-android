@@ -28,3 +28,4 @@
 - Removed `DragDropState` helper class
 - Simpler smoother list for `MainJournalScreen` with order indexing removed.
 - Changes in `JournalViewModel` and `JournalScreenElements` to remove `orderIndex`
+- The Bottom Sheet "Bounce" Fix in `JournalScreenElements`
