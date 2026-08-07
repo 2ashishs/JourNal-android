@@ -23,6 +23,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,6 +84,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -130,6 +132,7 @@ import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.models.LinkMetadataEntity
+import ash.app.journal.ui.theme.FadedGreyClose
 import ash.app.journal.ui.theme.JournalTheme
 import coil3.compose.AsyncImage
 import coil3.compose.rememberAsyncImagePainter
@@ -1178,29 +1181,10 @@ fun DetailEntryBottomSheet(
                                 )
 
                                 if (isImageFullscreen) {
-                                    Dialog(
-                                        onDismissRequest = { isImageFullscreen = false },
-                                        properties = DialogProperties(usePlatformDefaultWidth = false)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(Color.Black)
-                                                .pointerInput(Unit) {
-                                                    detectTapGestures(onDoubleTap = {
-                                                        isImageFullscreen = false
-                                                    })
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Image(
-                                                painter = rememberAsyncImagePainter(File(path)),
-                                                contentDescription = null,
-                                                contentScale = ContentScale.Fit, // Fits image inside boundaries without clipping details
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
+                                    ZoomableImageView(
+                                        imagePath = path,
+                                        onDismiss = { isImageFullscreen = false }
+                                    )
                                 }
                             }
 
@@ -1337,6 +1321,88 @@ private fun MissingMediaCard(
                     text = stringResource(R.string.clear_tag, mediaTypeName),
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ZoomableImageView(
+    imagePath: String,
+    onDismiss: () -> Unit
+) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .pointerInput(Unit) {
+                    // Double-tap to toggle zoom (1x <-> 2.5x)
+                    detectTapGestures(
+                        onDoubleTap = { _ ->
+                            if (scale > 1f) {
+                                scale = 1f
+                                offset = Offset.Zero
+                            } else {
+                                scale = 2.5f
+                                offset = Offset.Zero
+                            }
+                        },
+                        onTap = {
+                            // Single tap anywhere on black background to dismiss
+                            if (scale == 1f) {
+                                onDismiss()
+                            }
+                        }
+                    )
+                }
+                .pointerInput(Unit) {
+                    // Multi-finger pinch to zoom & pan
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(1f, 10f) // Cap zoom between 1x and 10x
+
+                        if (scale > 1f) {
+                            // Pan only when zoomed in
+                            offset += pan
+                        } else {
+                            offset = Offset.Zero
+                        }
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = rememberAsyncImagePainter(File(imagePath)),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offset.x
+                        translationY = offset.y
+                    }
+            )
+
+            // Subtle close button at top-right
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 16.dp, end = 16.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_close),
+                    contentDescription = stringResource(R.string.close_fullscreen),
+                    tint = FadedGreyClose
                 )
             }
         }

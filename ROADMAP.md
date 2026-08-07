@@ -3,7 +3,7 @@
 ## 🛠️ Features
 
 - Screen Lock for Privacy
-- Pinch and Zoom for Images / Videos
+- Pinch and Zoom for Videos
 - Import / Export entries functionality 
 - Settings Screen
 

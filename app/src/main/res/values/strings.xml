@@ -25,4 +25,5 @@
     <string name="magic_wand">Magic Wand</string>
     <string name="file_has_been_deleted_or_moved">%1$s file has been deleted or moved.</string>
     <string name="clear_tag">Clear %1$s tag</string>
+    <string name="close_fullscreen">Close FullScreen</string>
 </resources>
