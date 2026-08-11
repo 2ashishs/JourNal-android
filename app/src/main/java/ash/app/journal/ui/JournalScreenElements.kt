@@ -1413,7 +1413,8 @@ fun ZoomableImageView(
 @Composable
 fun LoopingVideoPlayer(videoPath: String) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current // Access the host activity's lifecycle state
+    // Access the host activity's lifecycle state
+    val lifecycleOwner = LocalLifecycleOwner.current
     var isFullscreen by remember { mutableStateOf(false) }
 
     // Master unified ExoPlayer instance tied to this lifecycle
@@ -1427,25 +1428,18 @@ fun LoopingVideoPlayer(videoPath: String) {
     }
 
     DisposableEffect(lifecycleOwner) {
-        // Added this code to prevent exoplayer from running in background
+        // Prevent exoplayer from running in background
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 // The app went to background or user switched apps -> Pause the hardware stream
-                Lifecycle.Event.ON_PAUSE -> {
-                    exoPlayer.pause()
-                }
+                Lifecycle.Event.ON_PAUSE -> exoPlayer.pause()
                 // User came back to the app foreground -> Resume playback smoothly
-                Lifecycle.Event.ON_RESUME -> {
-                    exoPlayer.play()
-                }
-
+                Lifecycle.Event.ON_RESUME -> exoPlayer.play()
                 else -> {}
             }
         }
-
         // Register our observer onto the activity lifecycle
         lifecycleOwner.lifecycle.addObserver(observer)
-
         // Clean up: unregister observer and completely release the video decoder on view death
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
@@ -1453,62 +1447,99 @@ fun LoopingVideoPlayer(videoPath: String) {
         }
     }
 
-    // Inline standard layout container player
-    AndroidView(
-        factory = { ctx ->
-            PlayerView(ctx).apply {
-                useController = false
-            }
-        },
-        update = { playerView ->
-            // --- THE FIXED SURFACE HAND-OFF ---
-            if (isFullscreen) {
-                // If full-screen is active, release the player from this view
-                // so the dialog's PlayerView can claim the surface safely
-                playerView.player = null
-            } else {
-                // When coming back, explicitly re-attach the engine to force a surface redraw
-                if (playerView.player != exoPlayer) {
-                    playerView.player = null // Clear old texture cache reference
-                    playerView.player = exoPlayer
-                }
-            }
-        },
+    // Standard inline player view
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(360.dp)
             .clip(RoundedCornerShape(12.dp))
-            .pointerInput(isFullscreen) {
-                detectTapGestures(
-                    onTap = { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() },
-                    onDoubleTap = { isFullscreen = true }
-                )
-            }
-    )
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply { useController = false }
+            },
+            update = { playerView ->
+                if (isFullscreen) {
+                    // If full-screen is active, release the player from this view
+                    // so the dialog's PlayerView can claim the surface safely
+                    playerView.player = null
+                } else {
+                    // When coming back, explicitly re-attach the engine to force a surface redraw
+                    if (playerView.player != exoPlayer) {
+                        // Clear old texture cache reference
+                        playerView.player = null
+                        playerView.player = exoPlayer
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
 
-    // Fullscreen Overlay Dialog
+        // Overlay Box to handle gestures reliably without blocking playback surface
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = {
+                            if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                        },
+                        onDoubleTap = {
+                            // Ensure player is playing when opening full screen
+                            exoPlayer.play()
+                            isFullscreen = true
+                        }
+                    )
+                }
+        )
+    }
+
+    // Fullscreen Zoomable Video Dialog
     if (isFullscreen) {
         Dialog(
             onDismissRequest = { isFullscreen = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
+            var scale by remember { mutableFloatStateOf(1f) }
+            var offset by remember { mutableStateOf(Offset.Zero) }
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
+                    .background(Color.Black)
                     .pointerInput(Unit) {
                         detectTapGestures(
-                            onTap = { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() },
-                            onDoubleTap = { isFullscreen = false }
+                            onDoubleTap = {
+                                isFullscreen = false
+//                                if (scale > 1f) {
+//                                    scale = 1f
+//                                    offset = Offset.Zero
+//                                } else {
+//                                    scale = 2.5f
+//                                    offset = Offset.Zero
+//                                }
+                            },
+                            onTap = {
+                                if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                            }
                         )
+                    }
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            scale = (scale * zoom).coerceIn(0.9f, 8f)
+
+                            if (scale > 1f) {
+                                offset += pan
+                            } else {
+                                offset = Offset.Zero
+                            }
+                        }
                     },
                 contentAlignment = Alignment.Center
             ) {
                 AndroidView(
                     factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            useController = false
-                        }
+                        PlayerView(ctx).apply { useController = false }
                     },
                     update = { fullscreenPlayerView ->
                         // Claim the player engine for the fullscreen view layer
@@ -1516,8 +1547,28 @@ fun LoopingVideoPlayer(videoPath: String) {
                             fullscreenPlayerView.player = exoPlayer
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            translationX = offset.x
+                            translationY = offset.y
+                        }
                 )
+
+                IconButton(
+                    onClick = { isFullscreen = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 16.dp, end = 16.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_close),
+                        contentDescription = stringResource(R.string.close_fullscreen),
+                        tint = FadedGreyClose
+                    )
+                }
             }
         }
     }

@@ -30,3 +30,4 @@
 - Changes in `JournalViewModel` and `JournalScreenElements` to remove `orderIndex`
 - The Bottom Sheet "Bounce" Fix in `JournalScreenElements`
 - Pinch and Zoom for Images using `ZoomableImageView`
+- Pinch and Zoom for Videos
