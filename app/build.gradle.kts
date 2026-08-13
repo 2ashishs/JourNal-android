@@ -9,18 +9,13 @@ plugins {
 android {
     namespace = "ash.app.journal"
     compileSdk = 37
-//    compileSdk {
-//        version = release(36) {
-//            minorApiLevel = 1
-//        }
-//    }
 
     defaultConfig {
         applicationId = "ash.app.journal"
         minSdk = 30
         targetSdk = 37
         versionCode = 1
-        versionName = "1.0.1"
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -32,7 +27,10 @@ android {
             }
             isMinifyEnabled = true
             isShrinkResources = true
-
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     compileOptions {
@@ -68,6 +66,8 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.square.okhttp)
+    implementation(libs.jsoup)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

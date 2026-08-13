@@ -11,9 +11,12 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ash.app.journal.ui.data.JournalRepository
+import ash.app.journal.ui.data.LinkMetadataRepository
+import ash.app.journal.ui.models.EntryColorTag
 import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
+import ash.app.journal.ui.models.LinkMetadataEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +31,8 @@ import java.util.Date
 import java.util.Locale
 
 class JournalViewModel(
-    private val repository: JournalRepository
+    private val repository: JournalRepository,
+    private val linkRepository: LinkMetadataRepository
 ) : ViewModel() {
 
     // 1. STREAM FROM DB: Automatically reads from Room and converts it into a StateFlow for Compose
@@ -53,8 +57,8 @@ class JournalViewModel(
         _draftState.update { it.copy(details = newDetails) }
     }
 
-    fun onColorSelected(hexColor: String?) {
-        _draftState.update { it.copy(selectedHexColor = hexColor) }
+    fun onColorSelected(colorTag: EntryColorTag) {
+        _draftState.update { it.copy(selectedColorTag = colorTag) }
     }
 
     fun onMediaCaptured(path: String?, type: EntryMediaType) {
@@ -202,7 +206,6 @@ class JournalViewModel(
     }
 
     override fun onCleared() {
-        super.onCleared()
         // If the app process destroys the ViewModel, kill the hardware connection immediately
         try {
             mediaRecorder?.apply {
@@ -231,21 +234,15 @@ class JournalViewModel(
 
         viewModelScope.launch {
             if (currentDraft.editingEntryId != null) {
-                // --- EDIT MODE: Fetch the existing entry configuration to preserve order index ---
-                val existingList = journalEntries.value
-                val existingEntry =
-                    existingList.firstOrNull { it.id == currentDraft.editingEntryId }
-                val currentOrderIndex = existingEntry?.orderIndex ?: 0
-
+                // --- EDIT ENTRY MODE ---
                 val updatedEntry = JournalEntry(
                     id = currentDraft.editingEntryId, // Matching ID triggers Room's REPLACE / Update mechanism
                     title = finalTitle,
                     details = currentDraft.details,
-                    hexColor = currentDraft.selectedHexColor,
+                    colorTag = currentDraft.selectedColorTag,
                     mediaPath = currentDraft.capturedMediaPath,
                     mediaType = currentDraft.capturedMediaType,
                     timestamp = System.currentTimeMillis(),
-                    orderIndex = currentOrderIndex
                 )
                 repository.insertEntry(updatedEntry)
             } else {
@@ -253,15 +250,13 @@ class JournalViewModel(
                 val newEntry = JournalEntry(
                     title = finalTitle,
                     details = currentDraft.details,
-                    hexColor = currentDraft.selectedHexColor,
+                    colorTag = currentDraft.selectedColorTag,
                     mediaPath = currentDraft.capturedMediaPath,
                     mediaType = currentDraft.capturedMediaType,
                     timestamp = System.currentTimeMillis(),
-                    orderIndex = journalEntries.value.size
                 )
                 repository.insertEntry(newEntry)
             }
-
             // Clear state back to default after saving
             _draftState.value = JournalDraftState()
         }
@@ -270,37 +265,11 @@ class JournalViewModel(
     fun deleteEntry(entry: JournalEntry) {
         viewModelScope.launch {
             repository.deleteEntry(entry)
-            // Optional: After deletion, re-index remaining entries so orderIndex stays sequential
-            reindexEntries()
         }
     }
 
-    fun moveEntry(fromIndex: Int, toIndex: Int) {
-        val currentList = journalEntries.value.toMutableList()
-        if (fromIndex in currentList.indices && toIndex in currentList.indices) {
-            // Swap positions in the local list copy
-            val movedItem = currentList.removeAt(fromIndex)
-            currentList.add(toIndex, movedItem)
-
-            // Update the orderIndex property of each item based on its new position
-            val updatedList = currentList.mapIndexed { index, item ->
-                item.copy(orderIndex = index)
-            }
-
-            // Persist the batch update to Room DB via repository
-            viewModelScope.launch {
-                repository.updateEntries(updatedList)
-            }
-        }
-    }
-
-    private suspend fun reindexEntries() {
-        val currentList = journalEntries.value
-        val updatedList = currentList.mapIndexed { index, item ->
-            item.copy(orderIndex = index)
-        }
-        repository.updateEntries(updatedList)
-    }
+    fun isMediaFileAvailable(entry: JournalEntry) =
+        entry.mediaPath != null && File(entry.mediaPath).exists()
 
     // Triggered when the user clicks "Edit" from either the Home menu or Detail Sheet
     fun startEditing(entry: JournalEntry) {
@@ -309,9 +278,9 @@ class JournalViewModel(
                 editingEntryId = entry.id,
                 title = entry.title,
                 details = entry.details,
-                selectedHexColor = entry.hexColor,
-                capturedMediaPath = entry.mediaPath,
-                capturedMediaType = entry.mediaType,
+                selectedColorTag = entry.colorTag,
+                capturedMediaPath = if (isMediaFileAvailable(entry)) entry.mediaPath else null,
+                capturedMediaType = if (isMediaFileAvailable(entry)) entry.mediaType else EntryMediaType.TEXT,
             )
         }
     }
@@ -321,4 +290,98 @@ class JournalViewModel(
     fun clearDraft() {
         _draftState.value = JournalDraftState()
     }
+
+    // Public UI state to trigger opening the bottom creation sheet instantly from the activity pass
+    var isCreateSheetOpen by mutableStateOf(false)
+        private set
+
+    fun setCreateSheetVisibility(visible: Boolean) {
+        isCreateSheetOpen = visible
+    }
+
+    fun stageSharedTextIntoDraft(sharedText: String) {
+        clearDraft()
+        onDetailsChanged(sharedText)
+        setCreateSheetVisibility(true)
+    }
+
+    fun stageSharedMediaIntoDraft(filePath: String, mediaType: EntryMediaType) {
+        clearDraft()
+        // Inject the external media directly into the draft and auto generate title placeholder
+        onMediaCaptured(filePath, mediaType)
+        // Pop open the sheet on screen
+        setCreateSheetVisibility(true)
+    }
+
+    // Keep a map of loaded metadata for current display session
+    private val _linkMetadataState = MutableStateFlow<Map<String, LinkMetadataEntity>>(emptyMap())
+    val linkMetadataState: StateFlow<Map<String, LinkMetadataEntity>> =
+        _linkMetadataState.asStateFlow()
+
+    fun processMagicWand(currentDetails: String) {
+        viewModelScope.launch {
+            val urlRegex = """(?<!url=)(?<!<)(https?://[^\s<>)]+)(?!>)""".toRegex()
+            val distinctLinks =
+                urlRegex.findAll(currentDetails).map { it.value }.distinct().toList()
+
+            if (distinctLinks.isEmpty()) return@launch
+
+            var updatedDetails = currentDetails
+            val fetchedMetadataMap = mutableMapOf<String, LinkMetadataEntity>()
+
+            distinctLinks.forEach { url ->
+                val metadata = linkRepository.getOrFetchMetadata(url)
+
+                if (metadata != null) {
+                    fetchedMetadataMap[url] = metadata
+                    // Clean syntax: [card](url=https://...)
+                    updatedDetails = updatedDetails.replace(url, "[card](url=$url)")
+                } else {
+                    // Fallback syntax: <https://...>
+                    updatedDetails = updatedDetails.replace(url, "<$url>")
+                }
+            }
+
+            // Update local memory map for MarkdownText rendering
+            _linkMetadataState.update { currentMap -> currentMap + fetchedMetadataMap }
+
+            _draftState.update { currentDraft ->
+                val singleValidMetadata = fetchedMetadataMap.values.singleOrNull()
+                //val newTitle = singleValidMetadata?.title ?: currentDraft.title
+
+                currentDraft.copy(
+                    details = updatedDetails,
+                    //title = if (currentDraft.title.isBlank() && singleValidMetadata != null) newTitle else currentDraft.title,
+                    autoTitlePlaceholder = singleValidMetadata?.title
+                        ?: currentDraft.autoTitlePlaceholder
+                )
+            }
+        }
+    }
+
+    fun fetchAndCacheMetadataForUrl(url: String) {
+        // Avoid re-fetching if metadata is already present in state
+        if (_linkMetadataState.value.containsKey(url)) return
+
+        viewModelScope.launch {
+            val metadata = linkRepository.getOrFetchMetadata(url)
+            if (metadata != null) {
+                _linkMetadataState.update { currentMap ->
+                    currentMap + (url to metadata)
+                }
+            }
+        }
+    }
+
+    fun removeMissingMediaFromEntry(entry: JournalEntry) {
+        viewModelScope.launch {
+            val updatedEntry = entry.copy(
+                mediaPath = null,
+                mediaType = EntryMediaType.TEXT
+            )
+            // Update entry in Room Database
+            repository.updateEntry(updatedEntry)
+        }
+    }
+
 }

@@ -1,21 +1,21 @@
-# 📋 RoadMap v1.0.2
+# 📋 RoadMap v1.0.3
 
-## 🛠️ New Features
+## 🛠️ Features
 
-- Allow other apps to share media to create Entry
-- Link / YouTube Support
+- Screen Lock for Privacy
+- Import / Export entries functionality 
 - Settings Screen
 
 
 ## 🎨️ Enhancements
 
-- Move all colors to a single file. Fix color related issues.
-- Extract all text to `strings.xml` for transliteration
+- List and Link subtypes for Entries
+- Move all colors to a single file, specifically remove all `Color.` references in any file.
 - Landscape mode possibility
 
-## 🐛 Refinements & Future-Proofing
+## 🐛 Fixes
 
-- The Bottom Sheet "Bounce" Fix: Debugging the Material 3 ModalBottomSheet state machine to prevent that annoying rubber-banding trigger when swiping closed.
+- UI Fixes for "Photo", "Video", "Audio" row
 - Performance: Storage & Battery Usage
 - `lint` integration to detect and fix mistakes
 - Testing Integration: write test cases to catch edge cases and potential pitfalls.

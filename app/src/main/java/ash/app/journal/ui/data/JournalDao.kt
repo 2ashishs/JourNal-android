@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface JournalDao {
 
-    @Query("SELECT * FROM journal_entries ORDER BY orderIndex ASC")
+    @Query("SELECT * FROM journal_entries ORDER BY timestamp DESC")
     fun getAllEntries(): Flow<List<JournalEntry>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -20,6 +20,9 @@ interface JournalDao {
 
     @Delete
     suspend fun deleteEntry(entry: JournalEntry)
+
+    @Update
+    suspend fun updateEntry(entry: JournalEntry)
 
     @Update
     suspend fun updateEntries(entries: List<JournalEntry>)

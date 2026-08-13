@@ -19,6 +19,10 @@ class JournalRepositoryImpl(
         journalDao.deleteEntry(entry)
     }
 
+    override suspend fun updateEntry(entry: JournalEntry) {
+        journalDao.updateEntry(entry)
+    }
+
     override suspend fun updateEntries(entries: List<JournalEntry>) {
         journalDao.updateEntries(entries)
     }

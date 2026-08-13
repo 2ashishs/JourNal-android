@@ -7,5 +7,6 @@ interface JournalRepository {
     fun getAllEntries(): Flow<List<JournalEntry>>
     suspend fun insertEntry(entry: JournalEntry): Long
     suspend fun deleteEntry(entry: JournalEntry)
+    suspend fun updateEntry(entry: JournalEntry)
     suspend fun updateEntries(entries: List<JournalEntry>)
 }
