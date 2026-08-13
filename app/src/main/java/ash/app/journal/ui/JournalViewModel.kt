@@ -359,14 +359,16 @@ class JournalViewModel(
         }
     }
 
-    // Call this when opening DetailEntryBottomSheet to load existing cards from DB
-    fun loadMetadataForEntry(detailsText: String) {
+    fun fetchAndCacheMetadataForUrl(url: String) {
+        // Avoid re-fetching if metadata is already present in state
+        if (_linkMetadataState.value.containsKey(url)) return
+
         viewModelScope.launch {
-            val cardUrlRegex = """\[card\]\(url=(.*?)\)""".toRegex()
-            val urls = cardUrlRegex.findAll(detailsText).map { it.groups[1]!!.value }.toList()
-            if (urls.isNotEmpty()) {
-                val cachedMap = linkRepository.getMetadataListForUrls(urls)
-                _linkMetadataState.update { current -> current + cachedMap }
+            val metadata = linkRepository.getOrFetchMetadata(url)
+            if (metadata != null) {
+                _linkMetadataState.update { currentMap ->
+                    currentMap + (url to metadata)
+                }
             }
         }
     }

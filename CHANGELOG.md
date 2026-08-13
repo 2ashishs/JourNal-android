@@ -31,3 +31,6 @@
 - The Bottom Sheet "Bounce" Fix in `JournalScreenElements`
 - Pinch and Zoom for Images using `ZoomableImageView`
 - Pinch and Zoom for Videos
+- Link Preview Card Parsing & URL Modification Handling
+- Removed `viewmodel` passing to `DetailEntryBottomSheet`
+- 

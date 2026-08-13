@@ -231,10 +231,15 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
         )
     }
 
+    val linkMetadataMap by viewModel.linkMetadataState.collectAsState()
+
     selectedEntryForDetail?.let { entry ->
         DetailEntryBottomSheet(
             entry = entry,
-            viewModel = viewModel,
+            metadataMap = linkMetadataMap,
+            isMediaFileAvailable = viewModel.isMediaFileAvailable(entry),
+            onFetchMetadata = { url -> viewModel.fetchAndCacheMetadataForUrl(url) },
+            onClearMissingMedia = { viewModel.removeMissingMediaFromEntry(entry) },
             onDismiss = { selectedEntryId = null },
             onEditClick = {
                 viewModel.startEditing(entry)
@@ -812,11 +817,11 @@ fun MarkdownText(
     text: String,
     style: TextStyle,
     color: Color,
-    metadataMap: Map<String, LinkMetadataEntity> = emptyMap()
+    metadataMap: Map<String, LinkMetadataEntity> = emptyMap(),
+    onFetchMetadata: (String) -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
     val lines = remember(text) { text.split("\n") }
-
     // Matches [card](url=https://...)
     val cardRegex = remember { """^\[card\]\(url=(.*?)\)$""".toRegex() }
 
@@ -831,20 +836,33 @@ fun MarkdownText(
                 val url = cardMatch.groups[1]?.value.orEmpty()
                 val metadata = metadataMap[url]
 
-                if (metadata != null) {
-                    LinkPreviewCard(
-                        url = metadata.url,
-                        title = metadata.title,
-                        description = metadata.description,
-                        imageUrl = metadata.imageUrl,
-                        onCardClick = { uriHandler.openUri(metadata.url) }
-                    )
-                } else {
-                    // While loading or if DB missing, render as clean clickable link
-                    BasicText(
-                        text = buildAnnotatedString { parseInlineLinks("<$url>") },
-                        style = style.copy(color = color)
-                    )
+                when {
+                    // Case-1: Metadata is available -> Render Card
+                    (metadata != null) -> {
+                        LinkPreviewCard(
+                            url = metadata.url,
+                            title = metadata.title,
+                            description = metadata.description,
+                            imageUrl = metadata.imageUrl,
+                            onCardClick = { uriHandler.openUri(metadata.url) }
+                        )
+                    }
+
+                    // Case-2: URL exists but missing metadata -> Render <URL> & fetch metadata
+                    url.isNotBlank() -> {
+                        // Fetch metadata via lambda
+                        LaunchedEffect(url) {
+                            onFetchMetadata(url)
+                        }
+                        // Render as clean clickable link
+                        BasicText(
+                            text = buildAnnotatedString { parseInlineLinks("<$url>") },
+                            style = style.copy(color = color)
+                        )
+                    }
+
+                    // Case-3: Empty URL -> Ignore completely
+                    else -> {}
                 }
             } else {
                 // --- STANDARD MARKDOWN TEXT ROW RUN ---[cite: 2]
@@ -1040,19 +1058,15 @@ private fun AnnotatedString.Builder.appendLineText(lineText: String) {
 @Composable
 fun DetailEntryBottomSheet(
     entry: JournalEntry,
-    viewModel: JournalViewModel,
+    metadataMap: Map<String, LinkMetadataEntity>,
+    isMediaFileAvailable: Boolean,
+    onFetchMetadata: (String) -> Unit,
+    onClearMissingMedia: () -> Unit,
     onDismiss: () -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onShareClick: () -> Unit
 ) {
-    // Collect the dynamic metadata map from the ViewModel state
-    val metadataMap by viewModel.linkMetadataState.collectAsState()
-    // Load DB metadata whenever this entry opens or changes
-    LaunchedEffect(entry.id) {
-        viewModel.loadMetadataForEntry(entry.details)
-    }
-
     // Get the device screen height dynamically
     val windowInfo = LocalWindowInfo.current
     val density = LocalDensity.current
@@ -1157,11 +1171,12 @@ fun DetailEntryBottomSheet(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         metadataMap = metadataMap,
+                        onFetchMetadata = onFetchMetadata
                     )
                 }
 
                 entry.mediaPath?.let { path ->
-                    if (viewModel.isMediaFileAvailable(entry)) {
+                    if (isMediaFileAvailable) {
                         when (entry.mediaType) {
                             EntryMediaType.PHOTO -> {
                                 var isImageFullscreen by remember { mutableStateOf(false) }
@@ -1204,7 +1219,7 @@ fun DetailEntryBottomSheet(
                         // --- FALLBACK WHEN FILE IS DELETED/CLEARED ---
                         MissingMediaCard(
                             mediaType = entry.mediaType,
-                            onClearMediaTag = { viewModel.removeMissingMediaFromEntry(entry) }
+                            onClearMediaTag = onClearMissingMedia
                         )
                     }
                 }
