@@ -2,21 +2,39 @@
 
 ## 🛠️ Features
 
-- Screen Lock for Privacy
-- Import / Export entries functionality 
 - Settings Screen
-
+  - Screen Lock for Privacy
+  - Import / Export entries functionality
+  - Color chips naming
+  - Delete all entries
+- On home screen,
+  - Summary View: Show only last 3-5 entries
+  - Dashboard View: Show weekly post count & total post count
+  - Dynamic Filter Bar (Color Tags & Media Types): Show chips below top action bar, where
+    - chips are Red-Yellow-Green-Blue-NoColor and Photo-Video-Audio-Link
+    - each chip has a count, associated with entries of that chip type
+    - tapping on a chip displays entries of that chip type
+  - Timeline Scaffolding with Sticky Headers
+  - Calendar View
+  - Media Gallery View
+  - "On this day" carousel card
+- Create reminder notifications
+- Search functionality
 
 ## 🎨️ Enhancements
 
-- List and Link subtypes for Entries
-- Move all colors to a single file, specifically remove all `Color.` references in any file.
-- Landscape mode possibility
+- Improve app icon
+- Layout Mode Switcher: Toggle between compact list view and a visual 2-column media grid.
+- Full screen detail page for each entry (instead of a bottom sheet)
+- Add List, Reminder and Link subtypes for entries
+- Add optional expiry date to auto-delete entries
+- "Magic Wand" functionality should be moved to "Save" button
+- Move all colors & text to a single file 🗹☐🗷
+- Landscape mode possibility or Portrait mode only
 
 ## 🐛 Fixes
 
-- UI Fixes for "Photo", "Video", "Audio" row
+- UX Fixes for "Photo", "Video", "Audio" row
 - Performance: Storage & Battery Usage
-- `lint` integration to detect and fix mistakes
-- Testing Integration: write test cases to catch edge cases and potential pitfalls.
-- UI-UX Freshness: Injecting vibrant design aesthetics, micro-interactions, haptic feedback triggers and playful typography variants to give the app a high-energy vibe.
+- Testing & `lint` integration
+- Material 3 Palette & Dark Mode Audit: Standardize container colors, surface tinting, and contrast tokens across themes.
