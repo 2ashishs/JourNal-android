@@ -23,7 +23,6 @@
 
 ## 🎨️ Enhancements
 
-- Improve "Details" section.
 - Improve app icon
 - Layout Mode Switcher: Toggle between compact list view and a visual 2-column media grid.
 - Full screen detail page for each entry (instead of a bottom sheet)

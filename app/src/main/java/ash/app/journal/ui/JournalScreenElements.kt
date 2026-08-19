@@ -539,7 +539,9 @@ fun CreateEntryBottomSheet(
                 label = { Text(stringResource(R.string.details)) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(120.dp),
+                    .heightIn(min = 96.dp, max = 480.dp),
+                minLines = 2,
+                maxLines = 8,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
             )
 
