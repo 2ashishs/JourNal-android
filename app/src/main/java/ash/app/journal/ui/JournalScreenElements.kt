@@ -100,12 +100,14 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
@@ -459,6 +461,54 @@ fun AudioRecordingIcon(
     }
 }
 
+fun handleBulletAutoContinue(
+    oldValue: TextFieldValue,
+    newValue: TextFieldValue
+): TextFieldValue {
+    val oldText = oldValue.text
+    val newText = newValue.text
+
+    // Check if the change was a single newline character insertion
+    if (newText.length == oldText.length + 1 &&
+        newValue.selection.start > 0 &&
+        newText[newValue.selection.start - 1] == '\n'
+    ) {
+        val cursorPosition = newValue.selection.start
+        val textBeforeCursor = newText.substring(0, cursorPosition - 1)
+        val lastLine = textBeforeCursor.substringAfterLast('\n')
+
+        val bulletPrefixes = listOf("- ", "+ ", "* ")
+        val matchedPrefix = bulletPrefixes.firstOrNull { lastLine.startsWith(it) }
+
+        if (matchedPrefix != null) {
+            // Case 1: Empty bullet line (user pressed enter on an empty bullet to exit list)
+            if (lastLine.trim() == matchedPrefix.trim()) {
+                val startOfLineIndex =
+                    textBeforeCursor.lastIndexOf('\n').let { if (it == -1) 0 else it + 1 }
+                val updatedText =
+                    newText.substring(0, startOfLineIndex) + newText.substring(cursorPosition)
+                return TextFieldValue(
+                    text = updatedText,
+                    selection = TextRange(startOfLineIndex)
+                )
+            }
+
+            // Case 2: Continue the bullet list on the new line
+            val updatedText =
+                newText.substring(0, cursorPosition) + matchedPrefix + newText.substring(
+                    cursorPosition
+                )
+            val newCursorPos = cursorPosition + matchedPrefix.length
+            return TextFieldValue(
+                text = updatedText,
+                selection = TextRange(newCursorPos)
+            )
+        }
+    }
+
+    return newValue
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateEntryBottomSheet(
@@ -509,6 +559,15 @@ fun CreateEntryBottomSheet(
         }
     }
 
+    var detailsTextFieldValue by remember(draftState.details) {
+        mutableStateOf(
+            TextFieldValue(
+                text = draftState.details,
+                selection = TextRange(draftState.details.length)
+            )
+        )
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface
@@ -534,8 +593,12 @@ fun CreateEntryBottomSheet(
             )
 
             OutlinedTextField(
-                value = draftState.details,
-                onValueChange = onDetailsChange,
+                value = detailsTextFieldValue,
+                onValueChange = { incomingValue: TextFieldValue ->
+                    val processedValue = handleBulletAutoContinue(detailsTextFieldValue, incomingValue)
+                    detailsTextFieldValue = processedValue
+                    onDetailsChange(processedValue.text)
+                },
                 label = { Text(stringResource(R.string.details)) },
                 modifier = Modifier
                     .fillMaxWidth()
