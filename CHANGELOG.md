@@ -3,3 +3,4 @@
 - Improve "Details" section.
   - List support while editing
   - List support fixes in `CreateEntryBottomSheet`
+- Motion fixes in `DetailEntryBottomSheet`

@@ -21,7 +21,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +68,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -1156,6 +1156,9 @@ fun DetailEntryBottomSheet(
     val maxSheetHeight = with(density) {
         (windowInfo.containerSize.height * 0.80f).toDp()
     }
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
 
     val preventUpwardBounceConnection = remember {
         object : NestedScrollConnection {
@@ -1183,9 +1186,11 @@ fun DetailEntryBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = null
     ) {
+        // Single parent container holding Header, Body, AND Action Bar together
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1197,14 +1202,6 @@ fun DetailEntryBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        // Intercept upward drags on the header so they don't bounce the bottom sheet
-                        detectDragGestures { change, dragAmount ->
-                            if (dragAmount.y < 0f) {
-                                change.consume() // Consumes upward drag on header
-                            }
-                        }
-                    }
                     .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -1262,7 +1259,6 @@ fun DetailEntryBottomSheet(
                         when (entry.mediaType) {
                             EntryMediaType.PHOTO -> {
                                 var isImageFullscreen by remember { mutableStateOf(false) }
-
                                 Image(
                                     painter = rememberAsyncImagePainter(File(path)),
                                     contentDescription = entry.title,
@@ -1276,7 +1272,6 @@ fun DetailEntryBottomSheet(
                                             })
                                         }
                                 )
-
                                 if (isImageFullscreen) {
                                     ZoomableImageView(
                                         imagePath = path,
@@ -1306,62 +1301,62 @@ fun DetailEntryBottomSheet(
                     }
                 }
             }
-        }
 
-        HorizontalDivider(
-            thickness = DividerDefaults.Thickness,
-            color = MaterialTheme.colorScheme.surfaceVariant
-        )
+            HorizontalDivider(
+                thickness = DividerDefaults.Thickness,
+                color = MaterialTheme.colorScheme.surfaceVariant
+            )
 
-        // FIXED BOTTOM ACTION ZONE
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
+            // FIXED BOTTOM ACTION ZONE
+            Row(
                 modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .height(48.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onDeleteClick) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_delete),
-                        contentDescription = stringResource(R.string.delete),
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(onClick = onDeleteClick) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_delete),
+                            contentDescription = stringResource(R.string.delete),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
-            }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(onClick = onShareClick) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_share),
-                        contentDescription = stringResource(R.string.share),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(onClick = onShareClick) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_share),
+                            contentDescription = stringResource(R.string.share),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(onClick = onEditClick) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_edit),
-                        contentDescription = stringResource(R.string.edit),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(onClick = onEditClick) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_edit),
+                            contentDescription = stringResource(R.string.edit),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
