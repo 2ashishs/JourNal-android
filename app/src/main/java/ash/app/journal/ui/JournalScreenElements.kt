@@ -468,23 +468,28 @@ fun handleBulletAutoContinue(
     val oldText = oldValue.text
     val newText = newValue.text
 
-    // Check if the change was a single newline character insertion
+    // Check if exactly 1 character was added and that character is a newline
     if (newText.length == oldText.length + 1 &&
         newValue.selection.start > 0 &&
         newText[newValue.selection.start - 1] == '\n'
     ) {
         val cursorPosition = newValue.selection.start
-        val textBeforeCursor = newText.substring(0, cursorPosition - 1)
-        val lastLine = textBeforeCursor.substringAfterLast('\n')
+        val textBeforeNewline = newText.substring(0, cursorPosition - 1)
+        val lastLine = textBeforeNewline.substringAfterLast('\n')
 
-        val bulletPrefixes = listOf("- ", "+ ", "* ")
-        val matchedPrefix = bulletPrefixes.firstOrNull { lastLine.startsWith(it) }
+        // Matches optional leading whitespace (spaces/tabs) followed by bullet marker
+        val bulletRegex = """^(\s*)([-*+]\s+)""".toRegex()
+        val matchResult = bulletRegex.find(lastLine)
 
-        if (matchedPrefix != null) {
-            // Case 1: Empty bullet line (user pressed enter on an empty bullet to exit list)
-            if (lastLine.trim() == matchedPrefix.trim()) {
+        if (matchResult != null) {
+            val indent = matchResult.groupValues[1]
+            val bulletMarker = matchResult.groupValues[2]
+            val fullPrefix = indent + bulletMarker
+
+            // Case 1: Empty bullet item -> delete bullet prefix on enter (exit list)
+            if (lastLine == fullPrefix.dropLastWhile { it == ' ' } || lastLine == fullPrefix) {
                 val startOfLineIndex =
-                    textBeforeCursor.lastIndexOf('\n').let { if (it == -1) 0 else it + 1 }
+                    textBeforeNewline.lastIndexOf('\n').let { if (it == -1) 0 else it + 1 }
                 val updatedText =
                     newText.substring(0, startOfLineIndex) + newText.substring(cursorPosition)
                 return TextFieldValue(
@@ -493,12 +498,12 @@ fun handleBulletAutoContinue(
                 )
             }
 
-            // Case 2: Continue the bullet list on the new line
-            val updatedText =
-                newText.substring(0, cursorPosition) + matchedPrefix + newText.substring(
-                    cursorPosition
-                )
-            val newCursorPos = cursorPosition + matchedPrefix.length
+            // Case 2: Continue list/sub-list with exact matching indentation
+            val updatedText = newText.substring(
+                0,
+                cursorPosition
+            ) + fullPrefix + newText.substring(cursorPosition)
+            val newCursorPos = cursorPosition + fullPrefix.length
             return TextFieldValue(
                 text = updatedText,
                 selection = TextRange(newCursorPos)
@@ -559,7 +564,7 @@ fun CreateEntryBottomSheet(
         }
     }
 
-    var detailsTextFieldValue by remember(draftState.details) {
+    var detailsTextFieldValue by remember {
         mutableStateOf(
             TextFieldValue(
                 text = draftState.details,
@@ -592,10 +597,22 @@ fun CreateEntryBottomSheet(
                 ),
             )
 
+            LaunchedEffect(draftState.details) {
+                if (detailsTextFieldValue.text != draftState.details) {
+                    val newCursor =
+                        detailsTextFieldValue.selection.start.coerceAtMost(draftState.details.length)
+                    detailsTextFieldValue = detailsTextFieldValue.copy(
+                        text = draftState.details,
+                        selection = TextRange(newCursor)
+                    )
+                }
+            }
+
             OutlinedTextField(
                 value = detailsTextFieldValue,
                 onValueChange = { incomingValue: TextFieldValue ->
-                    val processedValue = handleBulletAutoContinue(detailsTextFieldValue, incomingValue)
+                    val processedValue =
+                        handleBulletAutoContinue(detailsTextFieldValue, incomingValue)
                     detailsTextFieldValue = processedValue
                     onDetailsChange(processedValue.text)
                 },
