@@ -100,3 +100,15 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("ALTER TABLE `journal_entries_new` RENAME TO `journal_entries` ")
     }
 }
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS `recent_searches` (
+                `query` TEXT NOT NULL, 
+                `timestamp` INTEGER NOT NULL, 
+                PRIMARY KEY(`query`)
+            )
+        """.trimIndent())
+    }
+}
