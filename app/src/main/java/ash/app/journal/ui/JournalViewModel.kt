@@ -226,15 +226,38 @@ class JournalViewModel(
     }
 
     // --- Database Actions ---
-    // Refactored Save function with empty-title validation guard
 
     fun saveCurrentEntry() {
         val currentDraft = _draftState.value
+
+        val rawUrlRegex = """https?://[^\s<>]+""".toRegex()
 
         // CRITICAL VALIDATION: Prevent saving if the title is completely empty or whitespace
         val finalTitle = currentDraft.title.ifBlank { currentDraft.autoTitlePlaceholder }
         if (finalTitle.isBlank()) {
             return
+        }
+
+        // 1. Detect all HTTP/HTTPS links present in details
+        val foundUrls = rawUrlRegex.findAll(currentDraft.details)
+            .map { it.value }
+            .distinct()
+            .toList()
+
+        // 2. Wrap bare URLs with markdown <URL> syntax if not already formatted
+        var processedDetails = currentDraft.details
+        foundUrls.forEach { rawUrl ->
+            if (!processedDetails.contains("<$rawUrl>")) {
+                processedDetails = processedDetails.replace(rawUrl, "<$rawUrl>")
+            }
+        }
+
+        // 3. Resolve Media Type:
+        // Retain media attachment; if TEXT and contains URLs -> promote to LINK
+        val finalMediaType = when {
+            currentDraft.capturedMediaType != EntryMediaType.TEXT -> currentDraft.capturedMediaType
+            foundUrls.isNotEmpty() -> EntryMediaType.LINK
+            else -> EntryMediaType.TEXT
         }
 
         viewModelScope.launch {
@@ -243,10 +266,10 @@ class JournalViewModel(
                 val updatedEntry = JournalEntry(
                     id = currentDraft.editingEntryId, // Matching ID triggers Room's REPLACE / Update mechanism
                     title = finalTitle,
-                    details = currentDraft.details,
+                    details = processedDetails,
                     colorTag = currentDraft.selectedColorTag,
                     mediaPath = currentDraft.capturedMediaPath,
-                    mediaType = currentDraft.capturedMediaType,
+                    mediaType = finalMediaType,
                     timestamp = System.currentTimeMillis(),
                 )
                 repository.insertEntry(updatedEntry)
@@ -254,14 +277,20 @@ class JournalViewModel(
                 // --- NEW ENTRY MODE ---
                 val newEntry = JournalEntry(
                     title = finalTitle,
-                    details = currentDraft.details,
+                    details = processedDetails,
                     colorTag = currentDraft.selectedColorTag,
                     mediaPath = currentDraft.capturedMediaPath,
-                    mediaType = currentDraft.capturedMediaType,
+                    mediaType = finalMediaType,
                     timestamp = System.currentTimeMillis(),
                 )
                 repository.insertEntry(newEntry)
             }
+
+            // 4. Eagerly cache discovered link metadata in the background
+            foundUrls.forEach { url ->
+                fetchAndCacheMetadataForUrl(url)
+            }
+
             // Clear state back to default after saving
             _draftState.value = JournalDraftState()
         }
@@ -322,47 +351,6 @@ class JournalViewModel(
     private val _linkMetadataState = MutableStateFlow<Map<String, LinkMetadataEntity>>(emptyMap())
     val linkMetadataState: StateFlow<Map<String, LinkMetadataEntity>> =
         _linkMetadataState.asStateFlow()
-
-    fun processMagicWand(currentDetails: String) {
-        viewModelScope.launch {
-            val urlRegex = """(?<!url=)(?<!<)(https?://[^\s<>)]+)(?!>)""".toRegex()
-            val distinctLinks =
-                urlRegex.findAll(currentDetails).map { it.value }.distinct().toList()
-
-            if (distinctLinks.isEmpty()) return@launch
-
-            var updatedDetails = currentDetails
-            val fetchedMetadataMap = mutableMapOf<String, LinkMetadataEntity>()
-
-            distinctLinks.forEach { url ->
-                val metadata = linkRepository.getOrFetchMetadata(url)
-
-                if (metadata != null) {
-                    fetchedMetadataMap[url] = metadata
-                    // Clean syntax: [card](url=https://...)
-                    updatedDetails = updatedDetails.replace(url, "[card](url=$url)")
-                } else {
-                    // Fallback syntax: <https://...>
-                    updatedDetails = updatedDetails.replace(url, "<$url>")
-                }
-            }
-
-            // Update local memory map for MarkdownText rendering
-            _linkMetadataState.update { currentMap -> currentMap + fetchedMetadataMap }
-
-            _draftState.update { currentDraft ->
-                val singleValidMetadata = fetchedMetadataMap.values.singleOrNull()
-                //val newTitle = singleValidMetadata?.title ?: currentDraft.title
-
-                currentDraft.copy(
-                    details = updatedDetails,
-                    //title = if (currentDraft.title.isBlank() && singleValidMetadata != null) newTitle else currentDraft.title,
-                    autoTitlePlaceholder = singleValidMetadata?.title
-                        ?: currentDraft.autoTitlePlaceholder
-                )
-            }
-        }
-    }
 
     fun fetchAndCacheMetadataForUrl(url: String) {
         // Avoid re-fetching if metadata is already present in state

@@ -28,7 +28,6 @@
 - Full screen detail page for each entry (instead of a bottom sheet)
 - Add List, Reminder and Link subtypes for entries
 - Add optional expiry date to auto-delete entries
-- "Magic Wand" functionality should be moved to "Save" button
 - Move all colors & text to a single file 🗹☐🗷
 - Landscape mode possibility or Portrait mode only
 

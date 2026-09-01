@@ -7,4 +7,10 @@
 - Search
   - Search Data Layer
   - Search UI Layer
-- Link Icon
+- Add support for LINK text entry types
+  - EntryMediaType.LINK
+  - Link Icon & Link Row Item
+  - Link support in Search screen
+- "Magic Wand" functionality moved to "Save" button
+  - "Magic Wand" icon button removed
+- `MarkdownText` composable improvements

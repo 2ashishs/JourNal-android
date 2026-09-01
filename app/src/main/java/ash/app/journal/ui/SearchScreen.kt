@@ -264,6 +264,7 @@ fun SearchScreen(
                             Triple(EntryMediaType.PHOTO, R.drawable.ic_media_photo, "Photos"),
                             Triple(EntryMediaType.VIDEO, R.drawable.ic_media_video, "Videos"),
                             Triple(EntryMediaType.AUDIO, R.drawable.ic_media_audio, "Audios"),
+                            Triple(EntryMediaType.LINK, R.drawable.ic_media_link, "Links"),
                             Triple(EntryMediaType.TEXT, R.drawable.ic_media_text, "Notes")
                         ).forEach { (mediaType, iconRes, _) ->
                             val isSelected = selectedMediaFilter == mediaType

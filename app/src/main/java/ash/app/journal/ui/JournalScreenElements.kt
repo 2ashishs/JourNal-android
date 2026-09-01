@@ -233,7 +233,6 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             isRecordingAudio = viewModel.isRecordingAudio,
             startAudioRecording = viewModel::startAudioRecording,
             stopAudioRecording = viewModel::stopAudioRecording,
-            onMagicWandPress = viewModel::processMagicWand,
             onSave = {
                 viewModel.saveCurrentEntry()
                 viewModel.setCreateSheetVisibility(false)
@@ -274,6 +273,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                             EntryMediaType.PHOTO -> "image/*"
                             EntryMediaType.VIDEO -> "video/*"
                             EntryMediaType.AUDIO -> "audio/*"
+                            EntryMediaType.LINK -> "text/plain"
                             EntryMediaType.TEXT -> "text/plain"
                         }
                         val mediaFile = File(entry.mediaPath!!)
@@ -338,6 +338,7 @@ fun JournalRowItem(
         EntryMediaType.PHOTO -> R.drawable.ic_media_photo
         EntryMediaType.AUDIO -> R.drawable.ic_media_audio
         EntryMediaType.VIDEO -> R.drawable.ic_media_video
+        EntryMediaType.LINK -> R.drawable.ic_media_link
         EntryMediaType.TEXT -> R.drawable.ic_media_text
     }
     val tagColor = when (entry.colorTag) {
@@ -568,7 +569,6 @@ fun CreateEntryBottomSheet(
     isRecordingAudio: Boolean,
     startAudioRecording: (Context) -> Unit,
     stopAudioRecording: (Boolean, Context) -> Unit,
-    onMagicWandPress: (String) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -720,21 +720,6 @@ fun CreateEntryBottomSheet(
                             )
                     )
                 }
-
-                IconButton(
-                    modifier = Modifier.border(
-                        1.dp,
-                        MaterialTheme.colorScheme.onBackground,
-                        RoundedCornerShape(8.dp)
-                    ),
-                    onClick = { onMagicWandPress(draftState.details) },
-                ) {
-                    Icon(
-                        contentDescription = stringResource(R.string.magic_wand),
-                        painter = painterResource(R.drawable.ic_magic_wand),
-                        tint = MaterialTheme.colorScheme.onBackground,
-                    )
-                }
             }
 
             draftState.capturedMediaPath?.let { path ->
@@ -761,6 +746,7 @@ fun CreateEntryBottomSheet(
                         EntryMediaType.PHOTO -> R.drawable.ic_media_photo
                         EntryMediaType.VIDEO -> R.drawable.ic_media_video
                         EntryMediaType.AUDIO -> R.drawable.ic_media_audio
+                        EntryMediaType.LINK -> R.drawable.ic_media_link
                         EntryMediaType.TEXT -> null
                     }
 
@@ -947,23 +933,25 @@ fun MarkdownText(
 ) {
     val uriHandler = LocalUriHandler.current
     val lines = remember(text) { text.split("\n") }
-    // Matches [card](url=https://...)
-    val cardRegex = remember { """^\[card\]\(url=(.*?)\)$""".toRegex() }
+    val urlRegex = remember { """^<(https?://[^\s>]+)>$""".toRegex() }
+    val bulletRegex = remember { """^(\s*)([-*+]\s+)(.*)$""".toRegex() }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         lines.forEach { line ->
-            val cardMatch = cardRegex.matchEntire(line.trim())
+            val trimmedLine = line.trim()
+            val urlMatch = urlRegex.matchEntire(trimmedLine)
+            val bulletMatch = bulletRegex.matchEntire(line)
 
-            if (cardMatch != null) {
-                val url = cardMatch.groups[1]?.value.orEmpty()
+            if (urlMatch != null) {
+                val url = urlMatch.groupValues[1]
                 val metadata = metadataMap[url]
 
                 when {
                     // Case-1: Metadata is available -> Render Card
-                    (metadata != null) -> {
+                    metadata != null -> {
                         LinkPreviewCard(
                             url = metadata.url,
                             title = metadata.title,
@@ -990,26 +978,26 @@ fun MarkdownText(
                     else -> {}
                 }
             } else {
-                // --- STANDARD MARKDOWN TEXT ROW RUN ---[cite: 2]
+                val isBullet = bulletMatch != null
                 val annotatedString = buildAnnotatedString {
                     when {
-                        line.startsWith("# ") -> {
+                        trimmedLine.startsWith("# ") -> {
                             withStyle(
                                 SpanStyle(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = (style.fontSize.value + 4).sp
                                 )
                             ) {
-                                parseInlineLinks(line.removePrefix("# "))
+                                parseInlineLinks(trimmedLine.removePrefix("# "))
                             }
                         }
 
-                        line.startsWith("- ") || line.startsWith("* ") || line.startsWith("+ ") -> {
+                        bulletMatch != null -> {
+                            val indent = bulletMatch.groupValues[1]
+                            val bulletContent = bulletMatch.groupValues[3]
                             withStyle(SpanStyle(fontWeight = FontWeight.Normal)) {
-                                append("•  ")
-                                parseInlineLinks(
-                                    line.removePrefix("- ").removePrefix("* ").removePrefix("+ ")
-                                )
+                                append("$indent•  ")
+                                parseInlineLinks(bulletContent)
                             }
                         }
 
@@ -1017,16 +1005,11 @@ fun MarkdownText(
                     }
                 }
 
-                if (annotatedString.isNotEmpty()) {
+                if (annotatedString.isNotEmpty() || line.isEmpty()) {
                     BasicText(
                         text = annotatedString,
                         style = style.copy(color = color),
-                        modifier = Modifier.padding(
-                            vertical = if (line.startsWith("- ") || line.startsWith("* ") || line.startsWith(
-                                    "+ "
-                                )
-                            ) 2.dp else 0.dp
-                        )
+                        modifier = Modifier.padding(vertical = if (isBullet) 2.dp else 0.dp)
                     )
                 }
             }
@@ -1331,8 +1314,12 @@ fun DetailEntryBottomSheet(
                                 AudioPlayerRegion(audioPath = path)
                             }
 
+                            EntryMediaType.LINK -> {
+                                // Standard link layout flows cleanly
+                            }
+
                             EntryMediaType.TEXT -> {
-                                // Standard text layout flows cleanly with zero extra attachment
+                                // Standard text layout flows cleanly
                             }
                         }
                     } else {
@@ -1415,6 +1402,7 @@ private fun MissingMediaCard(
         EntryMediaType.PHOTO -> "Photo"
         EntryMediaType.VIDEO -> "Video"
         EntryMediaType.AUDIO -> "Audio file"
+        EntryMediaType.LINK -> "Link"
         EntryMediaType.TEXT -> "Media"
     }
 
