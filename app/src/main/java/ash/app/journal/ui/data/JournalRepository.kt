@@ -22,8 +22,8 @@ interface JournalRepository {
         mediaType: EntryMediaType? = null
     ): Flow<List<JournalEntry>>
     // Dynamic Count Aggregations for Filter Chips
-    fun getColorTagCounts(): Flow<List<ColorTagCount>>
-    fun getMediaTypeCounts(): Flow<List<MediaTypeCount>>
+    fun getColorTagCounts(mediaType: EntryMediaType? = null): Flow<List<ColorTagCount>>
+    fun getMediaTypeCounts(colorTag: EntryColorTag? = null): Flow<List<MediaTypeCount>>
     // Recent Searches Queries
     fun getRecentSearches(): Flow<List<RecentSearchEntity>>
     suspend fun saveRecentSearch(query: String)

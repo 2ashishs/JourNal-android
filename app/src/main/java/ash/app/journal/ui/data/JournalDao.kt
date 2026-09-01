@@ -32,13 +32,13 @@ interface JournalDao {
     @Update
     suspend fun updateEntries(entries: List<JournalEntry>)
 
-    // --- Search Query Matching Title or Details ---
+    // --- Search Query Matching Title or Details (Strict Non-Null Tag Support) ---
     @Query("""
         SELECT * FROM journal_entries 
         WHERE (title LIKE '%' || :query || '%' OR details LIKE '%' || :query || '%')
         AND (:colorTag IS NULL OR colorTag = :colorTag)
         AND (:mediaType IS NULL OR mediaType = :mediaType)
-        ORDER BY id DESC
+        ORDER BY timestamp DESC
     """)
     fun searchEntries(
         query: String,
@@ -46,14 +46,26 @@ interface JournalDao {
         mediaType: EntryMediaType? = null
     ): Flow<List<JournalEntry>>
 
-    // --- Dynamic Count Aggregations for Filter Chips ---
-    @Query("SELECT colorTag, COUNT(*) as count FROM journal_entries GROUP BY colorTag")
-    fun getColorTagCounts(): Flow<List<ColorTagCount>>
+    // --- Cross-Filtered Dynamic Counts ---
+    // Color tag counts filtered by active media type (if selected)
+    @Query("""
+        SELECT colorTag, COUNT(*) as count 
+        FROM journal_entries 
+        WHERE (:mediaType IS NULL OR mediaType = :mediaType)
+        GROUP BY colorTag
+    """)
+    fun getColorTagCounts(mediaType: EntryMediaType? = null): Flow<List<ColorTagCount>>
 
-    @Query("SELECT mediaType, COUNT(*) as count FROM journal_entries GROUP BY mediaType")
-    fun getMediaTypeCounts(): Flow<List<MediaTypeCount>>
+    // Media type counts filtered by active color tag (if selected)
+    @Query("""
+        SELECT mediaType, COUNT(*) as count 
+        FROM journal_entries 
+        WHERE (:colorTag IS NULL OR colorTag = :colorTag)
+        GROUP BY mediaType
+    """)
+    fun getMediaTypeCounts(colorTag: EntryColorTag? = null): Flow<List<MediaTypeCount>>
 
-    // --- Recent Searches Queries ---
+    // --- Recent Searches ---
     @Query("SELECT * FROM recent_searches ORDER BY timestamp DESC LIMIT 5")
     fun getRecentSearches(): Flow<List<RecentSearchEntity>>
 

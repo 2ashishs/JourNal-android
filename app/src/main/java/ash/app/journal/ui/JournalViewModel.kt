@@ -17,10 +17,15 @@ import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.models.LinkMetadataEntity
+import ash.app.journal.ui.models.RecentSearchEntity
+import ash.app.journal.ui.models.SearchFilterCounts
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -384,4 +389,98 @@ class JournalViewModel(
         }
     }
 
+    // SEARCH
+    // --- Search Query & Filter Selection States ---
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _selectedColorFilter = MutableStateFlow<EntryColorTag?>(null)
+    val selectedColorFilter: StateFlow<EntryColorTag?> = _selectedColorFilter.asStateFlow()
+
+    private val _selectedMediaFilter = MutableStateFlow<EntryMediaType?>(null)
+    val selectedMediaFilter: StateFlow<EntryMediaType?> = _selectedMediaFilter.asStateFlow()
+
+    // --- Reactive Search Results ---
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val searchResults: StateFlow<List<JournalEntry>> = combine(
+        _searchQuery,
+        _selectedColorFilter,
+        _selectedMediaFilter
+    ) { query, color, media ->
+        Triple(query, color, media)
+    }.flatMapLatest { (query, color, media) ->
+        repository.searchEntries(query = query, colorTag = color, mediaType = media)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    // Dynamic Filter Counts that automatically re-aggregate when a filter is selected
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val filterCounts: StateFlow<SearchFilterCounts> = combine(
+        _selectedMediaFilter.flatMapLatest { selectedMedia ->
+            repository.getColorTagCounts(selectedMedia)
+        },
+        _selectedColorFilter.flatMapLatest { selectedColor ->
+            repository.getMediaTypeCounts(selectedColor)
+        }
+    ) { colorList, mediaList ->
+        SearchFilterCounts(
+            colorCounts = colorList.associate { it.colorTag to it.count },
+            mediaCounts = mediaList.associate { it.mediaType to it.count }
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = SearchFilterCounts()
+    )
+
+    // --- Recent Searches History ---
+    val recentSearches: StateFlow<List<RecentSearchEntity>> = repository.getRecentSearches()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // --- Search Actions ---
+    fun onSearchQueryChanged(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun onColorFilterSelected(colorTag: EntryColorTag?) {
+        // Toggle selection: if already selected, unselect it
+        _selectedColorFilter.value = if (_selectedColorFilter.value == colorTag) null else colorTag
+    }
+
+    fun onMediaFilterSelected(mediaType: EntryMediaType?) {
+        // Toggle selection: if already selected, unselect it
+        _selectedMediaFilter.value =
+            if (_selectedMediaFilter.value == mediaType) null else mediaType
+    }
+
+    fun clearFilters() {
+        _selectedColorFilter.value = null
+        _selectedMediaFilter.value = null
+        _searchQuery.value = ""
+    }
+
+    fun saveRecentSearch(query: String) {
+        viewModelScope.launch {
+            repository.saveRecentSearch(query)
+        }
+    }
+
+    fun deleteRecentSearch(query: String) {
+        viewModelScope.launch {
+            repository.deleteRecentSearch(query)
+        }
+    }
+
+    fun clearAllRecentSearches() {
+        viewModelScope.launch {
+            repository.clearAllRecentSearches()
+        }
+    }
 }

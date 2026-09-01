@@ -155,10 +155,21 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
     val context = LocalContext.current
     val shareViaTitle = stringResource(R.string.share_entry_via)
 
+    var isSearchScreenOpen by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("JourNaL", fontWeight = FontWeight.Bold) },
+                actions = {
+                    IconButton(onClick = { isSearchScreenOpen = true }) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_search),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            contentDescription = "Search",
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground
@@ -281,6 +292,38 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                 )
                 context.startActivity(chooserIntent)
             }
+        )
+    }
+
+    // Collect ViewModel Search States:
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val selectedColorFilter by viewModel.selectedColorFilter.collectAsState()
+    val selectedMediaFilter by viewModel.selectedMediaFilter.collectAsState()
+    val filterCounts by viewModel.filterCounts.collectAsState()
+    val searchResults by viewModel.searchResults.collectAsState()
+    val recentSearches by viewModel.recentSearches.collectAsState()
+
+    if (isSearchScreenOpen) {
+        SearchScreen(
+            query = searchQuery,
+            onQueryChange = viewModel::onSearchQueryChanged,
+            selectedColorFilter = selectedColorFilter,
+            selectedMediaFilter = selectedMediaFilter,
+            filterCounts = filterCounts,
+            searchResults = searchResults,
+            recentSearches = recentSearches,
+            onColorFilterSelected = viewModel::onColorFilterSelected,
+            onMediaFilterSelected = viewModel::onMediaFilterSelected,
+            onSearchExecuted = { term -> viewModel.saveRecentSearch(term) },
+            onDeleteRecentSearch = viewModel::deleteRecentSearch,
+            onClearAllRecentSearches = viewModel::clearAllRecentSearches,
+            onEntryClick = { entry ->
+                selectedEntryId = entry.id // Opens your DetailEntryBottomSheet
+            },
+            onBackClick = {
+                viewModel.clearFilters()
+                isSearchScreenOpen = false
+            },
         )
     }
 }
