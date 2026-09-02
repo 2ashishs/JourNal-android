@@ -16,3 +16,5 @@
 - `MarkdownText` composable improvements
 - Migrated legacy `card` url entries to `<url>` in Db; Db version updated to 6
 - Upgrade `coil` to `3.6.1`, `agp` to `9.4.0` and `gradle` to `9.6.0`
+- Removed close button before Search bar; functionality shifted to leading icon in Search bar
+- Keyboard in Search screen closes, if any of the filter chips are selected
