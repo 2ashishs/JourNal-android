@@ -10,6 +10,7 @@ import ash.app.journal.ui.data.MIGRATION_1_2
 import ash.app.journal.ui.data.MIGRATION_2_3
 import ash.app.journal.ui.data.MIGRATION_3_4
 import ash.app.journal.ui.data.MIGRATION_4_5
+import ash.app.journal.ui.data.MIGRATION_5_6
 import okhttp3.OkHttpClient
 
 class JournalApplication : Application() {
@@ -26,6 +27,7 @@ class JournalApplication : Application() {
                 MIGRATION_2_3, // added table `link_metadata`
                 MIGRATION_3_4, // dropped `orderIndex` from `journal_entries`
                 MIGRATION_4_5, // created table `recent_searches`
+                MIGRATION_5_6, // migrate `card` url syntax to `<url>`
             )
             .build()
     }
