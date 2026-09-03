@@ -314,6 +314,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             recentSearches = recentSearches,
             onColorFilterSelected = viewModel::onColorFilterSelected,
             onMediaFilterSelected = viewModel::onMediaFilterSelected,
+            onClearFilterChips = viewModel::clearFilterChips,
             onSearchExecuted = { term -> viewModel.saveRecentSearch(term) },
             onDeleteRecentSearch = viewModel::deleteRecentSearch,
             onClearAllRecentSearches = viewModel::clearAllRecentSearches,

@@ -22,3 +22,4 @@
 - Increased "recent search" items list to 15 (from 5) in `JournalDao`
 - Keyboard in Search screen closes, if user scrolls "recent search" list or "search result" list
 - Added `contentDescription` to icons on Search screen
+- "Filter" header with "Clear Filter" action, above the "FilterChips" section on Search screen

@@ -73,6 +73,7 @@ fun SearchScreen(
     recentSearches: List<RecentSearchEntity>,
     onColorFilterSelected: (EntryColorTag?) -> Unit,
     onMediaFilterSelected: (EntryMediaType?) -> Unit,
+    onClearFilterChips: () -> Unit,
     onSearchExecuted: (String) -> Unit,
     onDeleteRecentSearch: (String) -> Unit,
     onClearAllRecentSearches: () -> Unit,
@@ -85,6 +86,8 @@ fun SearchScreen(
     val lazyListState = rememberLazyListState()
 
     val squircleShape = RoundedCornerShape(8.dp)
+
+    val hasActiveFilters = selectedColorFilter != null || selectedMediaFilter != null
 
     BackHandler(enabled = true) { onBackClick.invoke() }
 
@@ -163,6 +166,35 @@ fun SearchScreen(
                         }
                     )
                 )
+            }
+
+            // --- FILTER SECTION HEADER ---
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Filter",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (hasActiveFilters) {
+                    Text(
+                        text = "Clear Filter",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { onClearFilterChips() }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
             }
 
             // --- FILTER BADGE MATRIX CONTAINER ---

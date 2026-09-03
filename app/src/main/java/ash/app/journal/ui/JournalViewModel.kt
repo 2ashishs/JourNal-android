@@ -454,6 +454,11 @@ class JournalViewModel(
         _searchQuery.value = ""
     }
 
+    fun clearFilterChips() {
+        _selectedColorFilter.value = null
+        _selectedMediaFilter.value = null
+    }
+
     fun saveRecentSearch(query: String) {
         viewModelScope.launch {
             repository.saveRecentSearch(query)
