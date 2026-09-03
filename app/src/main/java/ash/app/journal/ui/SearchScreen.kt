@@ -5,7 +5,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +20,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -45,7 +45,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -83,12 +82,21 @@ fun SearchScreen(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val lazyListState = rememberLazyListState()
+
     val squircleShape = RoundedCornerShape(8.dp)
 
     BackHandler(enabled = true) { onBackClick.invoke() }
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+    }
+
+    LaunchedEffect(lazyListState.isScrollInProgress) {
+        if (lazyListState.isScrollInProgress) {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+        }
     }
 
     Surface(
@@ -264,7 +272,7 @@ fun SearchScreen(
                             Triple(EntryMediaType.AUDIO, R.drawable.ic_media_audio, "Audios"),
                             Triple(EntryMediaType.LINK, R.drawable.ic_media_link, "Links"),
                             Triple(EntryMediaType.TEXT, R.drawable.ic_media_text, "Notes")
-                        ).forEach { (mediaType, iconRes, _) ->
+                        ).forEach { (mediaType, iconRes, iconMediaType) ->
                             val isSelected = selectedMediaFilter == mediaType
                             val count = filterCounts.mediaCounts[mediaType] ?: 0
 
@@ -275,7 +283,11 @@ fun SearchScreen(
                                         if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                         else Color.Transparent
                                     )
-                                    .clickable { onMediaFilterSelected(mediaType) }
+                                    .clickable {
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
+                                        onMediaFilterSelected(mediaType)
+                                    }
                                     .padding(horizontal = 6.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -297,7 +309,7 @@ fun SearchScreen(
                                 ) {
                                     Icon(
                                         painter = painterResource(iconRes),
-                                        contentDescription = null,
+                                        contentDescription = iconMediaType,
                                         modifier = Modifier.size(18.dp),
                                         tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                     )
@@ -346,6 +358,7 @@ fun SearchScreen(
                     }
 
                     LazyColumn(
+                        state = lazyListState,
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(horizontal = 16.dp)
                     ) {
@@ -354,6 +367,8 @@ fun SearchScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
                                         onQueryChange(recent.query)
                                         onSearchExecuted(recent.query)
                                     }
@@ -361,8 +376,8 @@ fun SearchScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_refresh),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.ic_search_again),
+                                    contentDescription = "Search again",
                                     modifier = Modifier.size(20.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -407,14 +422,8 @@ fun SearchScreen(
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(Unit) {
-                                detectDragGestures { _, _ ->
-                                    keyboardController?.hide()
-                                    focusManager.clearFocus()
-                                }
-                            },
+                        state = lazyListState,
+                        modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {

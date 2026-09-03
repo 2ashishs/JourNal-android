@@ -18,3 +18,7 @@
 - Upgrade `coil` to `3.6.1`, `agp` to `9.4.0` and `gradle` to `9.6.0`
 - Removed close button before Search bar; functionality shifted to leading icon in Search bar
 - Keyboard in Search screen closes, if any of the filter chips are selected
+- Updated "recent search" item leading icon
+- Increased "recent search" items list to 15 (from 5) in `JournalDao`
+- Keyboard in Search screen closes, if user scrolls "recent search" list or "search result" list
+- Added `contentDescription` to icons on Search screen

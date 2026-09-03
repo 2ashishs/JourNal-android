@@ -66,7 +66,7 @@ interface JournalDao {
     fun getMediaTypeCounts(colorTag: EntryColorTag? = null): Flow<List<MediaTypeCount>>
 
     // --- Recent Searches ---
-    @Query("SELECT * FROM recent_searches ORDER BY timestamp DESC LIMIT 5")
+    @Query("SELECT * FROM recent_searches ORDER BY timestamp DESC LIMIT 15")
     fun getRecentSearches(): Flow<List<RecentSearchEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
