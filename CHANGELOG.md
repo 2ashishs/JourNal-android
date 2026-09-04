@@ -23,3 +23,6 @@
 - Keyboard in Search screen closes, if user scrolls "recent search" list or "search result" list
 - Added `contentDescription` to icons on Search screen
 - "Filter" header with "Clear Filter" action, above the "FilterChips" section on Search screen
+- Increased size of filter chip icons
+- Fixed filter chip icon movement when their count changed from double digits to single digit
+- Added a horizontal divider between color and media type filter chip rows

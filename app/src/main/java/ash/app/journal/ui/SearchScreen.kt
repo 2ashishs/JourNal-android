@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -216,7 +217,6 @@ fun SearchScreen(
                     // Row 1: All Color Tag Badges (Red, Yellow, Green, Blue, No Color)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         listOf(
@@ -229,73 +229,85 @@ fun SearchScreen(
                             val isSelected = selectedColorFilter == colorTag
                             val count = filterCounts.colorCounts[colorTag] ?: 0
 
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                        else Color.Transparent
-                                    )
-                                    .clickable {
-                                        keyboardController?.hide()
-                                        focusManager.clearFocus()
-                                        onColorFilterSelected(colorTag)
-                                    }
-                                    .padding(horizontal = 6.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
                             ) {
-                                if (colorTag != EntryColorTag.DEFAULT) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(squircleShape)
-                                            .background(tagColor)
-                                            .border(
-                                                width = if (isSelected) 2.dp else 0.dp,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                shape = squircleShape
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(
+                                                alpha = 0.15f
                                             )
-                                    )
-                                } else {
-                                    // Squircloid "No Color / Default" diagonal slash squircle
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(squircleShape)
-                                            .background(tagColor)
-                                            .border(
-                                                width = if (isSelected) 2.dp else 1.dp,
-                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                                                shape = squircleShape
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Canvas(modifier = Modifier.size(20.dp)) {
-                                            drawLine(
-                                                color = Color.Red,
-                                                start = Offset(0f, size.height),
-                                                end = Offset(size.width, 0f),
-                                                strokeWidth = 2.dp.toPx()
-                                            )
+                                            else Color.Transparent
+                                        )
+                                        .clickable {
+                                            keyboardController?.hide()
+                                            focusManager.clearFocus()
+                                            onColorFilterSelected(colorTag)
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    if (colorTag != EntryColorTag.DEFAULT) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .clip(squircleShape)
+                                                .background(tagColor)
+                                                .border(
+                                                    width = if (isSelected) 2.dp else 0.dp,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    shape = squircleShape
+                                                )
+                                        )
+                                    } else {
+                                        // "No Color / Default" diagonal slash squircle
+                                        Box(
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .clip(squircleShape)
+                                                .background(tagColor)
+                                                .border(
+                                                    width = if (isSelected) 2.dp else 1.dp,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                                    shape = squircleShape
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Canvas(modifier = Modifier.size(20.dp)) {
+                                                drawLine(
+                                                    color = Color.Red,
+                                                    start = Offset(0f, size.height),
+                                                    end = Offset(size.width, 0f),
+                                                    strokeWidth = 2.dp.toPx()
+                                                )
+                                            }
                                         }
                                     }
-                                }
 
-                                Text(
-                                    text = count.toString(),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                                    Text(
+                                        text = count.toString(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.widthIn(min = 16.dp),
+                                    )
+                                }
                             }
                         }
                     }
 
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+
                     // Row 2: Media Type Badges (Photo, Video, Audio, Text/No-Media)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         listOf(
@@ -308,51 +320,59 @@ fun SearchScreen(
                             val isSelected = selectedMediaFilter == mediaType
                             val count = filterCounts.mediaCounts[mediaType] ?: 0
 
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                        else Color.Transparent
-                                    )
-                                    .clickable {
-                                        keyboardController?.hide()
-                                        focusManager.clearFocus()
-                                        onMediaFilterSelected(mediaType)
-                                    }
-                                    .padding(horizontal = 6.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(
+                                Row(
                                     modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(squircleShape)
+                                        .clip(RoundedCornerShape(12.dp))
                                         .background(
-                                            if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                            else MaterialTheme.colorScheme.surface
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(
+                                                alpha = 0.15f
+                                            )
+                                            else Color.Transparent
                                         )
-                                        .border(
-                                            width = if (isSelected) 2.dp else 1.dp,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                                            shape = squircleShape
-                                        ),
-                                    contentAlignment = Alignment.Center
+                                        .clickable {
+                                            keyboardController?.hide()
+                                            focusManager.clearFocus()
+                                            onMediaFilterSelected(mediaType)
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Icon(
-                                        painter = painterResource(iconRes),
-                                        contentDescription = iconMediaType,
-                                        modifier = Modifier.size(18.dp),
-                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .clip(squircleShape)
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                                else MaterialTheme.colorScheme.surface
+                                            )
+                                            .border(
+                                                width = if (isSelected) 2.dp else 1.dp,
+                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                                shape = squircleShape
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(iconRes),
+                                            contentDescription = iconMediaType,
+                                            modifier = Modifier.size(24.dp),
+                                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+
+                                    Text(
+                                        text = count.toString(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.widthIn(min = 16.dp),
                                     )
                                 }
-
-                                Text(
-                                    text = count.toString(),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
                             }
                         }
                     }
