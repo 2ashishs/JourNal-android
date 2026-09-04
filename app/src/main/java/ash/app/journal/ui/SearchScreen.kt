@@ -139,7 +139,13 @@ fun SearchScreen(
                     },
                     trailingIcon = {
                         if (query.isNotEmpty()) {
-                            IconButton(onClick = { onQueryChange("") }) {
+                            IconButton(
+                                onClick = {
+                                    onQueryChange("")
+                                    focusRequester.requestFocus()
+                                    keyboardController?.show()
+                                }
+                            ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_close),
                                     contentDescription = "Clear text",
