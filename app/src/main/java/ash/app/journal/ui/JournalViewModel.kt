@@ -17,10 +17,15 @@ import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.models.LinkMetadataEntity
+import ash.app.journal.ui.models.RecentSearchEntity
+import ash.app.journal.ui.models.SearchFilterCounts
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -221,15 +226,38 @@ class JournalViewModel(
     }
 
     // --- Database Actions ---
-    // Refactored Save function with empty-title validation guard
 
     fun saveCurrentEntry() {
         val currentDraft = _draftState.value
+
+        val rawUrlRegex = """https?://[^\s<>]+""".toRegex()
 
         // CRITICAL VALIDATION: Prevent saving if the title is completely empty or whitespace
         val finalTitle = currentDraft.title.ifBlank { currentDraft.autoTitlePlaceholder }
         if (finalTitle.isBlank()) {
             return
+        }
+
+        // 1. Detect all HTTP/HTTPS links present in details
+        val foundUrls = rawUrlRegex.findAll(currentDraft.details)
+            .map { it.value }
+            .distinct()
+            .toList()
+
+        // 2. Wrap bare URLs with markdown <URL> syntax if not already formatted
+        var processedDetails = currentDraft.details
+        foundUrls.forEach { rawUrl ->
+            if (!processedDetails.contains("<$rawUrl>")) {
+                processedDetails = processedDetails.replace(rawUrl, "<$rawUrl>")
+            }
+        }
+
+        // 3. Resolve Media Type:
+        // Retain media attachment; if TEXT and contains URLs -> promote to LINK
+        val finalMediaType = when {
+            currentDraft.capturedMediaType != EntryMediaType.TEXT -> currentDraft.capturedMediaType
+            foundUrls.isNotEmpty() -> EntryMediaType.LINK
+            else -> EntryMediaType.TEXT
         }
 
         viewModelScope.launch {
@@ -238,10 +266,10 @@ class JournalViewModel(
                 val updatedEntry = JournalEntry(
                     id = currentDraft.editingEntryId, // Matching ID triggers Room's REPLACE / Update mechanism
                     title = finalTitle,
-                    details = currentDraft.details,
+                    details = processedDetails,
                     colorTag = currentDraft.selectedColorTag,
                     mediaPath = currentDraft.capturedMediaPath,
-                    mediaType = currentDraft.capturedMediaType,
+                    mediaType = finalMediaType,
                     timestamp = System.currentTimeMillis(),
                 )
                 repository.insertEntry(updatedEntry)
@@ -249,14 +277,20 @@ class JournalViewModel(
                 // --- NEW ENTRY MODE ---
                 val newEntry = JournalEntry(
                     title = finalTitle,
-                    details = currentDraft.details,
+                    details = processedDetails,
                     colorTag = currentDraft.selectedColorTag,
                     mediaPath = currentDraft.capturedMediaPath,
-                    mediaType = currentDraft.capturedMediaType,
+                    mediaType = finalMediaType,
                     timestamp = System.currentTimeMillis(),
                 )
                 repository.insertEntry(newEntry)
             }
+
+            // 4. Eagerly cache discovered link metadata in the background
+            foundUrls.forEach { url ->
+                fetchAndCacheMetadataForUrl(url)
+            }
+
             // Clear state back to default after saving
             _draftState.value = JournalDraftState()
         }
@@ -318,47 +352,6 @@ class JournalViewModel(
     val linkMetadataState: StateFlow<Map<String, LinkMetadataEntity>> =
         _linkMetadataState.asStateFlow()
 
-    fun processMagicWand(currentDetails: String) {
-        viewModelScope.launch {
-            val urlRegex = """(?<!url=)(?<!<)(https?://[^\s<>)]+)(?!>)""".toRegex()
-            val distinctLinks =
-                urlRegex.findAll(currentDetails).map { it.value }.distinct().toList()
-
-            if (distinctLinks.isEmpty()) return@launch
-
-            var updatedDetails = currentDetails
-            val fetchedMetadataMap = mutableMapOf<String, LinkMetadataEntity>()
-
-            distinctLinks.forEach { url ->
-                val metadata = linkRepository.getOrFetchMetadata(url)
-
-                if (metadata != null) {
-                    fetchedMetadataMap[url] = metadata
-                    // Clean syntax: [card](url=https://...)
-                    updatedDetails = updatedDetails.replace(url, "[card](url=$url)")
-                } else {
-                    // Fallback syntax: <https://...>
-                    updatedDetails = updatedDetails.replace(url, "<$url>")
-                }
-            }
-
-            // Update local memory map for MarkdownText rendering
-            _linkMetadataState.update { currentMap -> currentMap + fetchedMetadataMap }
-
-            _draftState.update { currentDraft ->
-                val singleValidMetadata = fetchedMetadataMap.values.singleOrNull()
-                //val newTitle = singleValidMetadata?.title ?: currentDraft.title
-
-                currentDraft.copy(
-                    details = updatedDetails,
-                    //title = if (currentDraft.title.isBlank() && singleValidMetadata != null) newTitle else currentDraft.title,
-                    autoTitlePlaceholder = singleValidMetadata?.title
-                        ?: currentDraft.autoTitlePlaceholder
-                )
-            }
-        }
-    }
-
     fun fetchAndCacheMetadataForUrl(url: String) {
         // Avoid re-fetching if metadata is already present in state
         if (_linkMetadataState.value.containsKey(url)) return
@@ -384,4 +377,103 @@ class JournalViewModel(
         }
     }
 
+    // SEARCH
+    // --- Search Query & Filter Selection States ---
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _selectedColorFilter = MutableStateFlow<EntryColorTag?>(null)
+    val selectedColorFilter: StateFlow<EntryColorTag?> = _selectedColorFilter.asStateFlow()
+
+    private val _selectedMediaFilter = MutableStateFlow<EntryMediaType?>(null)
+    val selectedMediaFilter: StateFlow<EntryMediaType?> = _selectedMediaFilter.asStateFlow()
+
+    // --- Reactive Search Results ---
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val searchResults: StateFlow<List<JournalEntry>> = combine(
+        _searchQuery,
+        _selectedColorFilter,
+        _selectedMediaFilter
+    ) { query, color, media ->
+        Triple(query, color, media)
+    }.flatMapLatest { (query, color, media) ->
+        repository.searchEntries(query = query, colorTag = color, mediaType = media)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    // Dynamic Filter Counts that automatically re-aggregate when a filter is selected
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val filterCounts: StateFlow<SearchFilterCounts> = combine(
+        _selectedMediaFilter.flatMapLatest { selectedMedia ->
+            repository.getColorTagCounts(selectedMedia)
+        },
+        _selectedColorFilter.flatMapLatest { selectedColor ->
+            repository.getMediaTypeCounts(selectedColor)
+        }
+    ) { colorList, mediaList ->
+        SearchFilterCounts(
+            colorCounts = colorList.associate { it.colorTag to it.count },
+            mediaCounts = mediaList.associate { it.mediaType to it.count }
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = SearchFilterCounts()
+    )
+
+    // --- Recent Searches History ---
+    val recentSearches: StateFlow<List<RecentSearchEntity>> = repository.getRecentSearches()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // --- Search Actions ---
+    fun onSearchQueryChanged(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun onColorFilterSelected(colorTag: EntryColorTag?) {
+        // Toggle selection: if already selected, unselect it
+        _selectedColorFilter.value = if (_selectedColorFilter.value == colorTag) null else colorTag
+    }
+
+    fun onMediaFilterSelected(mediaType: EntryMediaType?) {
+        // Toggle selection: if already selected, unselect it
+        _selectedMediaFilter.value =
+            if (_selectedMediaFilter.value == mediaType) null else mediaType
+    }
+
+    fun clearFilters() {
+        _selectedColorFilter.value = null
+        _selectedMediaFilter.value = null
+        _searchQuery.value = ""
+    }
+
+    fun clearFilterChips() {
+        _selectedColorFilter.value = null
+        _selectedMediaFilter.value = null
+    }
+
+    fun saveRecentSearch(query: String) {
+        viewModelScope.launch {
+            repository.saveRecentSearch(query)
+        }
+    }
+
+    fun deleteRecentSearch(query: String) {
+        viewModelScope.launch {
+            repository.deleteRecentSearch(query)
+        }
+    }
+
+    fun clearAllRecentSearches() {
+        viewModelScope.launch {
+            repository.clearAllRecentSearches()
+        }
+    }
 }

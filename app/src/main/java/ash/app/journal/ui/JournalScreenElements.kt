@@ -21,7 +21,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +68,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -100,12 +100,14 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
@@ -153,10 +155,21 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
     val context = LocalContext.current
     val shareViaTitle = stringResource(R.string.share_entry_via)
 
+    var isSearchScreenOpen by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("JourNaL", fontWeight = FontWeight.Bold) },
+                actions = {
+                    IconButton(onClick = { isSearchScreenOpen = true }) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_search),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            contentDescription = "Search",
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground
@@ -220,7 +233,6 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             isRecordingAudio = viewModel.isRecordingAudio,
             startAudioRecording = viewModel::startAudioRecording,
             stopAudioRecording = viewModel::stopAudioRecording,
-            onMagicWandPress = viewModel::processMagicWand,
             onSave = {
                 viewModel.saveCurrentEntry()
                 viewModel.setCreateSheetVisibility(false)
@@ -261,6 +273,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                             EntryMediaType.PHOTO -> "image/*"
                             EntryMediaType.VIDEO -> "video/*"
                             EntryMediaType.AUDIO -> "audio/*"
+                            EntryMediaType.LINK -> "text/plain"
                             EntryMediaType.TEXT -> "text/plain"
                         }
                         val mediaFile = File(entry.mediaPath!!)
@@ -281,6 +294,39 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             }
         )
     }
+
+    // Collect ViewModel Search States:
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val selectedColorFilter by viewModel.selectedColorFilter.collectAsState()
+    val selectedMediaFilter by viewModel.selectedMediaFilter.collectAsState()
+    val filterCounts by viewModel.filterCounts.collectAsState()
+    val searchResults by viewModel.searchResults.collectAsState()
+    val recentSearches by viewModel.recentSearches.collectAsState()
+
+    if (isSearchScreenOpen) {
+        SearchScreen(
+            query = searchQuery,
+            onQueryChange = viewModel::onSearchQueryChanged,
+            selectedColorFilter = selectedColorFilter,
+            selectedMediaFilter = selectedMediaFilter,
+            filterCounts = filterCounts,
+            searchResults = searchResults,
+            recentSearches = recentSearches,
+            onColorFilterSelected = viewModel::onColorFilterSelected,
+            onMediaFilterSelected = viewModel::onMediaFilterSelected,
+            onClearFilterChips = viewModel::clearFilterChips,
+            onSearchExecuted = { term -> viewModel.saveRecentSearch(term) },
+            onDeleteRecentSearch = viewModel::deleteRecentSearch,
+            onClearAllRecentSearches = viewModel::clearAllRecentSearches,
+            onEntryClick = { entry ->
+                selectedEntryId = entry.id // Opens your DetailEntryBottomSheet
+            },
+            onBackClick = {
+                viewModel.clearFilters()
+                isSearchScreenOpen = false
+            },
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -293,6 +339,7 @@ fun JournalRowItem(
         EntryMediaType.PHOTO -> R.drawable.ic_media_photo
         EntryMediaType.AUDIO -> R.drawable.ic_media_audio
         EntryMediaType.VIDEO -> R.drawable.ic_media_video
+        EntryMediaType.LINK -> R.drawable.ic_media_link
         EntryMediaType.TEXT -> R.drawable.ic_media_text
     }
     val tagColor = when (entry.colorTag) {
@@ -459,6 +506,59 @@ fun AudioRecordingIcon(
     }
 }
 
+fun handleBulletAutoContinue(
+    oldValue: TextFieldValue,
+    newValue: TextFieldValue
+): TextFieldValue {
+    val oldText = oldValue.text
+    val newText = newValue.text
+
+    // Check if exactly 1 character was added and that character is a newline
+    if (newText.length == oldText.length + 1 &&
+        newValue.selection.start > 0 &&
+        newText[newValue.selection.start - 1] == '\n'
+    ) {
+        val cursorPosition = newValue.selection.start
+        val textBeforeNewline = newText.substring(0, cursorPosition - 1)
+        val lastLine = textBeforeNewline.substringAfterLast('\n')
+
+        // Matches optional leading whitespace (spaces/tabs) followed by bullet marker
+        val bulletRegex = """^(\s*)([-*+]\s+)""".toRegex()
+        val matchResult = bulletRegex.find(lastLine)
+
+        if (matchResult != null) {
+            val indent = matchResult.groupValues[1]
+            val bulletMarker = matchResult.groupValues[2]
+            val fullPrefix = indent + bulletMarker
+
+            // Case 1: Empty bullet item -> delete bullet prefix on enter (exit list)
+            if (lastLine == fullPrefix.dropLastWhile { it == ' ' } || lastLine == fullPrefix) {
+                val startOfLineIndex =
+                    textBeforeNewline.lastIndexOf('\n').let { if (it == -1) 0 else it + 1 }
+                val updatedText =
+                    newText.substring(0, startOfLineIndex) + newText.substring(cursorPosition)
+                return TextFieldValue(
+                    text = updatedText,
+                    selection = TextRange(startOfLineIndex)
+                )
+            }
+
+            // Case 2: Continue list/sub-list with exact matching indentation
+            val updatedText = newText.substring(
+                0,
+                cursorPosition
+            ) + fullPrefix + newText.substring(cursorPosition)
+            val newCursorPos = cursorPosition + fullPrefix.length
+            return TextFieldValue(
+                text = updatedText,
+                selection = TextRange(newCursorPos)
+            )
+        }
+    }
+
+    return newValue
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateEntryBottomSheet(
@@ -470,7 +570,6 @@ fun CreateEntryBottomSheet(
     isRecordingAudio: Boolean,
     startAudioRecording: (Context) -> Unit,
     stopAudioRecording: (Boolean, Context) -> Unit,
-    onMagicWandPress: (String) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -509,6 +608,15 @@ fun CreateEntryBottomSheet(
         }
     }
 
+    var detailsTextFieldValue by remember {
+        mutableStateOf(
+            TextFieldValue(
+                text = draftState.details,
+                selection = TextRange(draftState.details.length)
+            )
+        )
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface
@@ -533,13 +641,31 @@ fun CreateEntryBottomSheet(
                 ),
             )
 
+            LaunchedEffect(draftState.details) {
+                if (detailsTextFieldValue.text != draftState.details) {
+                    val newCursor =
+                        detailsTextFieldValue.selection.start.coerceAtMost(draftState.details.length)
+                    detailsTextFieldValue = detailsTextFieldValue.copy(
+                        text = draftState.details,
+                        selection = TextRange(newCursor)
+                    )
+                }
+            }
+
             OutlinedTextField(
-                value = draftState.details,
-                onValueChange = onDetailsChange,
+                value = detailsTextFieldValue,
+                onValueChange = { incomingValue: TextFieldValue ->
+                    val processedValue =
+                        handleBulletAutoContinue(detailsTextFieldValue, incomingValue)
+                    detailsTextFieldValue = processedValue
+                    onDetailsChange(processedValue.text)
+                },
                 label = { Text(stringResource(R.string.details)) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(120.dp),
+                    .heightIn(min = 96.dp, max = 480.dp),
+                minLines = 2,
+                maxLines = 8,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
             )
 
@@ -595,21 +721,6 @@ fun CreateEntryBottomSheet(
                             )
                     )
                 }
-
-                IconButton(
-                    modifier = Modifier.border(
-                        1.dp,
-                        MaterialTheme.colorScheme.onBackground,
-                        RoundedCornerShape(8.dp)
-                    ),
-                    onClick = { onMagicWandPress(draftState.details) },
-                ) {
-                    Icon(
-                        contentDescription = stringResource(R.string.magic_wand),
-                        painter = painterResource(R.drawable.ic_magic_wand),
-                        tint = MaterialTheme.colorScheme.onBackground,
-                    )
-                }
             }
 
             draftState.capturedMediaPath?.let { path ->
@@ -636,6 +747,7 @@ fun CreateEntryBottomSheet(
                         EntryMediaType.PHOTO -> R.drawable.ic_media_photo
                         EntryMediaType.VIDEO -> R.drawable.ic_media_video
                         EntryMediaType.AUDIO -> R.drawable.ic_media_audio
+                        EntryMediaType.LINK -> R.drawable.ic_media_link
                         EntryMediaType.TEXT -> null
                     }
 
@@ -822,23 +934,25 @@ fun MarkdownText(
 ) {
     val uriHandler = LocalUriHandler.current
     val lines = remember(text) { text.split("\n") }
-    // Matches [card](url=https://...)
-    val cardRegex = remember { """^\[card\]\(url=(.*?)\)$""".toRegex() }
+    val urlRegex = remember { """^<(https?://[^\s>]+)>$""".toRegex() }
+    val bulletRegex = remember { """^(\s*)([-*+]\s+)(.*)$""".toRegex() }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         lines.forEach { line ->
-            val cardMatch = cardRegex.matchEntire(line.trim())
+            val trimmedLine = line.trim()
+            val urlMatch = urlRegex.matchEntire(trimmedLine)
+            val bulletMatch = bulletRegex.matchEntire(line)
 
-            if (cardMatch != null) {
-                val url = cardMatch.groups[1]?.value.orEmpty()
+            if (urlMatch != null) {
+                val url = urlMatch.groupValues[1]
                 val metadata = metadataMap[url]
 
                 when {
                     // Case-1: Metadata is available -> Render Card
-                    (metadata != null) -> {
+                    metadata != null -> {
                         LinkPreviewCard(
                             url = metadata.url,
                             title = metadata.title,
@@ -865,26 +979,26 @@ fun MarkdownText(
                     else -> {}
                 }
             } else {
-                // --- STANDARD MARKDOWN TEXT ROW RUN ---[cite: 2]
+                val isBullet = bulletMatch != null
                 val annotatedString = buildAnnotatedString {
                     when {
-                        line.startsWith("# ") -> {
+                        trimmedLine.startsWith("# ") -> {
                             withStyle(
                                 SpanStyle(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = (style.fontSize.value + 4).sp
                                 )
                             ) {
-                                parseInlineLinks(line.removePrefix("# "))
+                                parseInlineLinks(trimmedLine.removePrefix("# "))
                             }
                         }
 
-                        line.startsWith("- ") || line.startsWith("* ") || line.startsWith("+ ") -> {
+                        bulletMatch != null -> {
+                            val indent = bulletMatch.groupValues[1]
+                            val bulletContent = bulletMatch.groupValues[3]
                             withStyle(SpanStyle(fontWeight = FontWeight.Normal)) {
-                                append("•  ")
-                                parseInlineLinks(
-                                    line.removePrefix("- ").removePrefix("* ").removePrefix("+ ")
-                                )
+                                append("$indent•  ")
+                                parseInlineLinks(bulletContent)
                             }
                         }
 
@@ -892,16 +1006,11 @@ fun MarkdownText(
                     }
                 }
 
-                if (annotatedString.isNotEmpty()) {
+                if (annotatedString.isNotEmpty() || line.isEmpty()) {
                     BasicText(
                         text = annotatedString,
                         style = style.copy(color = color),
-                        modifier = Modifier.padding(
-                            vertical = if (line.startsWith("- ") || line.startsWith("* ") || line.startsWith(
-                                    "+ "
-                                )
-                            ) 2.dp else 0.dp
-                        )
+                        modifier = Modifier.padding(vertical = if (isBullet) 2.dp else 0.dp)
                     )
                 }
             }
@@ -1074,6 +1183,9 @@ fun DetailEntryBottomSheet(
     val maxSheetHeight = with(density) {
         (windowInfo.containerSize.height * 0.80f).toDp()
     }
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
 
     val preventUpwardBounceConnection = remember {
         object : NestedScrollConnection {
@@ -1101,9 +1213,11 @@ fun DetailEntryBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = null
     ) {
+        // Single parent container holding Header, Body, AND Action Bar together
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1115,14 +1229,6 @@ fun DetailEntryBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        // Intercept upward drags on the header so they don't bounce the bottom sheet
-                        detectDragGestures { change, dragAmount ->
-                            if (dragAmount.y < 0f) {
-                                change.consume() // Consumes upward drag on header
-                            }
-                        }
-                    }
                     .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -1180,7 +1286,6 @@ fun DetailEntryBottomSheet(
                         when (entry.mediaType) {
                             EntryMediaType.PHOTO -> {
                                 var isImageFullscreen by remember { mutableStateOf(false) }
-
                                 Image(
                                     painter = rememberAsyncImagePainter(File(path)),
                                     contentDescription = entry.title,
@@ -1194,7 +1299,6 @@ fun DetailEntryBottomSheet(
                                             })
                                         }
                                 )
-
                                 if (isImageFullscreen) {
                                     ZoomableImageView(
                                         imagePath = path,
@@ -1211,8 +1315,12 @@ fun DetailEntryBottomSheet(
                                 AudioPlayerRegion(audioPath = path)
                             }
 
+                            EntryMediaType.LINK -> {
+                                // Standard link layout flows cleanly
+                            }
+
                             EntryMediaType.TEXT -> {
-                                // Standard text layout flows cleanly with zero extra attachment
+                                // Standard text layout flows cleanly
                             }
                         }
                     } else {
@@ -1224,62 +1332,62 @@ fun DetailEntryBottomSheet(
                     }
                 }
             }
-        }
 
-        HorizontalDivider(
-            thickness = DividerDefaults.Thickness,
-            color = MaterialTheme.colorScheme.surfaceVariant
-        )
+            HorizontalDivider(
+                thickness = DividerDefaults.Thickness,
+                color = MaterialTheme.colorScheme.surfaceVariant
+            )
 
-        // FIXED BOTTOM ACTION ZONE
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
+            // FIXED BOTTOM ACTION ZONE
+            Row(
                 modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .height(48.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onDeleteClick) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_delete),
-                        contentDescription = stringResource(R.string.delete),
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(onClick = onDeleteClick) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_delete),
+                            contentDescription = stringResource(R.string.delete),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
-            }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(onClick = onShareClick) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_share),
-                        contentDescription = stringResource(R.string.share),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(onClick = onShareClick) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_share),
+                            contentDescription = stringResource(R.string.share),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(onClick = onEditClick) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_edit),
-                        contentDescription = stringResource(R.string.edit),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(onClick = onEditClick) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_edit),
+                            contentDescription = stringResource(R.string.edit),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -1295,6 +1403,7 @@ private fun MissingMediaCard(
         EntryMediaType.PHOTO -> "Photo"
         EntryMediaType.VIDEO -> "Video"
         EntryMediaType.AUDIO -> "Audio file"
+        EntryMediaType.LINK -> "Link"
         EntryMediaType.TEXT -> "Media"
     }
 

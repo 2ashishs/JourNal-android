@@ -1,36 +1,29 @@
-# 📋 Changelog for v1.0.2
+# 📋 Changelog for v1.0.3
 
-- ProGuard optimization rules for release builds.
-- Added CHANGELOG.md
-- Allow other apps to share media / text to create Entry
-- Markdown support in `Details`
-- Fix color related issues
-- Migrate DB to change COLUMN `hexColor:String` to `colorTag: EntryColorTag`
-- Extract all text to `strings.xml` for transliteration (except `autoTitle` in `JournalViewModel`)
-- Display entries in reverse order (latest first).
-- Updated move (drag) entry logic for reverse order in `JournalViewModel`.
-- MarkDownText support for lists, starting with `* ` and `+ `
-- MarkDownText support for inline links `<URL>` and `[URL Text](URL)`
-- Magic Wand button to replace weblinks with `LinkPreviewCard` support in MarkDownText
-- Upgrade AGP dependency from 9.2.1 to 9.3.0
-- Upgrade Gradle version to 9.5.0
-- Animated audio recording button
-- Update Audio, Video, Photo icon UX
-- Added `okHttp` (for networking) and `jsoup` (for dom parsing of html/xml)
-- Link & YouTube `EntryType` support
-- List `EntryType` support (for list in md)
-- Added `LinkPreviewCard` to display a card for links, using custom Markdown syntax
-- Added LinkMetaData table to save and retrieve metadata of links. Added it to JournalDatabase. Thus, db migration to version 3.
-- Max 2 lines to display title in rows as well as details screen
-- Order entries by `timestamp`
-- Drop `orderIndex` field in `JournalEntry` class and as column in table.
-- DbMigrations to drop `orderIndex`
-- Removed `DragDropState` helper class
-- Simpler smoother list for `MainJournalScreen` with order indexing removed.
-- Changes in `JournalViewModel` and `JournalScreenElements` to remove `orderIndex`
-- The Bottom Sheet "Bounce" Fix in `JournalScreenElements`
-- Pinch and Zoom for Images using `ZoomableImageView`
-- Pinch and Zoom for Videos
-- Link Preview Card Parsing & URL Modification Handling
-- Removed `viewmodel` passing to `DetailEntryBottomSheet`
-- 
+- Improve "Details" section.
+  - List support while editing
+  - List support fixes in `CreateEntryBottomSheet`
+- Motion fixes in `DetailEntryBottomSheet`
+- Search
+  - Search Data Layer
+  - Search UI Layer
+- Add support for LINK text entry types
+  - EntryMediaType.LINK
+  - Link Icon & Link Row Item
+  - Link support in Search screen
+- "Magic Wand" functionality moved to "Save" button
+  - "Magic Wand" icon button removed
+- `MarkdownText` composable improvements
+- Migrated legacy `card` url entries to `<url>` in Db; Db version updated to 6
+- Upgrade `coil` to `3.6.1`, `agp` to `9.4.0` and `gradle` to `9.6.0`
+- Removed close button before Search bar; functionality shifted to leading icon in Search bar
+- Keyboard in Search screen closes, if any of the filter chips are selected
+- Updated "recent search" item leading icon
+- Increased "recent search" items list to 15 (from 5) in `JournalDao`
+- Keyboard in Search screen closes, if user scrolls "recent search" list or "search result" list
+- Added `contentDescription` to icons on Search screen
+- "Filter" header with "Clear Filter" action, above the "FilterChips" section on Search screen
+- Increased size of filter chip icons
+- Fixed filter chip icon movement when their count changed from double digits to single digit
+- Added a horizontal divider between color and media type filter chip rows
+- Search enhancement to handle queries with whitespace

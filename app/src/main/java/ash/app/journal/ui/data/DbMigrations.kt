@@ -100,3 +100,35 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("ALTER TABLE `journal_entries_new` RENAME TO `journal_entries` ")
     }
 }
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS `recent_searches` (
+                `query` TEXT NOT NULL, 
+                `timestamp` INTEGER NOT NULL, 
+                PRIMARY KEY(`query`)
+            )
+        """.trimIndent())
+    }
+}
+
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // 1. Promote entries containing [card](url=...) or http links to LINK type if they were TEXT
+        db.execSQL("""
+            UPDATE journal_entries 
+            SET mediaType = 'LINK' 
+            WHERE mediaType = 'TEXT' 
+            AND (details LIKE '%[card](url=%' OR details LIKE '%http%')
+        """.trimIndent())
+
+        // 2. Optional: If sqlite replace is available, sanitize the syntax in text
+        // (SQLite's built-in REPLACE handles exact string replacements)
+        db.execSQL("""
+            UPDATE journal_entries 
+            SET details = REPLACE(REPLACE(details, '[card](url=', '<'), ')', '>')
+            WHERE details LIKE '%[card](url=%'
+        """.trimIndent())
+    }
+}
