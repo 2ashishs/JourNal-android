@@ -6,3 +6,5 @@
 - Moved `HomeScreen` and `SearchScreen` into the `screens` package
 - Separated out screen elements from `HomeScreen` into `EntryCreateElements`, `EntryDetailsElements` and `MarkdownText`
 - `MarkdownText` improvements: added support for `>` Quote blocks, `##` secondary header; code refactorings.
+- `MarkdownToolbar` along with `MarkdownToolbarUtils` added to `CreateEntryBottomSheet`
+- Media chips icon row issue fixed in `CreateEntryBottomSheet`

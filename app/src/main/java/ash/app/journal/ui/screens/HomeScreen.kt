@@ -437,6 +437,7 @@ fun CreateEntryBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -475,10 +476,18 @@ fun CreateEntryBottomSheet(
                 label = { Text(stringResource(R.string.details)) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 96.dp, max = 480.dp),
+                    .heightIn(min = 96.dp, max = 280.dp),
                 minLines = 2,
                 maxLines = 8,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
+            )
+
+            MarkdownToolbar(
+                value = detailsTextFieldValue,
+                onValueChange = { updated ->
+                    detailsTextFieldValue = updated
+                    onDetailsChange(updated.text)
+                }
             )
 
             Row(
@@ -607,22 +616,26 @@ fun CreateEntryBottomSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 16.dp),
+                    .padding(top = 4.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Left Segment: Packs all mutually exclusive media choice chips cleanly together
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f) // Takes up remaining left-side real estate dynamically
                 ) {
+                    // Photo chip
                     if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.PHOTO) {
                         IconButton(
-                            modifier = Modifier.border(
-                                1.dp,
-                                MaterialTheme.colorScheme.onBackground,
-                                RoundedCornerShape(8.dp)
-                            ),
+                            modifier = Modifier
+                                .size(44.dp)
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.onBackground,
+                                    RoundedCornerShape(8.dp)
+                                ),
                             onClick = {
                                 val file = createTempImageFile(context)
                                 val authority = "${context.packageName}.fileprovider"
@@ -645,14 +658,16 @@ fun CreateEntryBottomSheet(
                             )
                         }
                     }
-
+                    // Video chip
                     if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.VIDEO) {
                         IconButton(
-                            modifier = Modifier.border(
-                                1.dp,
-                                MaterialTheme.colorScheme.onBackground,
-                                RoundedCornerShape(8.dp)
-                            ),
+                            modifier = Modifier
+                                .size(44.dp)
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.onBackground,
+                                    RoundedCornerShape(8.dp)
+                                ),
                             onClick = {
                                 val file = createTempVideoFile(context)
                                 val authority = "${context.packageName}.fileprovider"
@@ -675,14 +690,16 @@ fun CreateEntryBottomSheet(
                             )
                         }
                     }
-
+                    // Audio chip
                     if (draftState.capturedMediaType == EntryMediaType.TEXT || draftState.capturedMediaType == EntryMediaType.AUDIO) {
                         IconButton(
-                            modifier = Modifier.border(
-                                1.dp,
-                                if (isRecordingAudio) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                                RoundedCornerShape(8.dp)
-                            ),
+                            modifier = Modifier
+                                .size(44.dp)
+                                .border(
+                                    1.dp,
+                                    if (isRecordingAudio) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    RoundedCornerShape(8.dp)
+                                ),
                             onClick = {
                                 if (isRecordingAudio) {
                                     stopAudioRecording(false, context)
