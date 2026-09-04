@@ -1,4 +1,4 @@
-package ash.app.journal.ui
+package ash.app.journal.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas

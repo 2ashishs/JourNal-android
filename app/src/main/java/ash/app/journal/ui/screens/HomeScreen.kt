@@ -1,20 +1,12 @@
-package ash.app.journal.ui
+package ash.app.journal.ui.screens
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.MediaPlayer
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -22,7 +14,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,7 +35,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -57,24 +47,18 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -82,9 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -92,55 +74,29 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withLink
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import ash.app.journal.R
+import ash.app.journal.ui.JournalViewModel
 import ash.app.journal.ui.models.EntryColorTag
 import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.models.LinkMetadataEntity
-import ash.app.journal.ui.theme.FadedGreyClose
 import ash.app.journal.ui.theme.JournalTheme
-import coil3.compose.AsyncImage
 import coil3.compose.rememberAsyncImagePainter
-import kotlinx.coroutines.delay
 import java.io.File
-import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -413,150 +369,6 @@ private fun createTempImageFile(context: Context): File {
 private fun createTempVideoFile(context: Context): File {
     val directory = File(context.cacheDir, "journal_videos").apply { mkdirs() }
     return File.createTempFile("captured_video_", ".mp4", directory)
-}
-
-@Composable
-fun AudioRecordingIcon(
-    isRecording: Boolean,
-    modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.onSurface
-) {
-    // 1. Set up the infinite animation loop engine
-    val transition = rememberInfiniteTransition(label = "EqualizerTransition")
-
-    // Animate structural progress from 0.0 to 1.0 back and forth
-    val animationProgress by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 650, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "EqualizerProgress"
-    )
-
-    // 2. Draw via Canvas matching the exact 24dp footprint from your resource file
-    Canvas(modifier = modifier.size(24.dp)) {
-        // Compute layout scale coefficients mapping directly to your 960x960 viewport setup
-        val scaleX = size.width / 960f
-        val scaleY = size.height / 960f
-        val barWidth = 80f * scaleX
-
-        // --- MATH RULES FROM DECONSTRUCTED PATH DATA ---
-        // Your vector base configuration lists these strict properties:
-        // Mid Bars (X: 280, 600): Top Y = 240, Height = 480 (Static center at Y = 480)
-        // Center Bar (X: 440): Top Y = 80, Height = 800 (Static center at Y = 480)
-        // Extreme Bars (X: 120, 760): Top Y = 400, Height = 160 (Static center at Y = 480)
-
-        val centerY = 480f * scaleY
-
-        // Mid bars stay completely static at height 480
-        val midBarHeight = 480f * scaleY
-
-        // Center bar decreases with time (from 800 down to 240)
-        val centerBarHeight = if (isRecording) {
-            (800f - (560f * animationProgress)) * scaleY
-        } else {
-            800f * scaleY
-        }
-
-        // Extreme bars increase at the exact same time (from 160 up to 480)
-        val extremeBarHeight = if (isRecording) {
-            (160f + (320f * animationProgress)) * scaleY
-        } else {
-            160f * scaleY
-        }
-
-        // --- DRAW PATTERNS MATRICES ---
-
-        // 1. Extreme Left (Base X: 120, Y: 400)
-        drawRect(
-            color = color,
-            topLeft = Offset(120f * scaleX, centerY - (extremeBarHeight / 2f)),
-            size = Size(barWidth, extremeBarHeight)
-        )
-
-        // 2. Mid Left (Base X: 280, Y: 240)
-        drawRect(
-            color = color,
-            topLeft = Offset(280f * scaleX, centerY - (midBarHeight / 2f)),
-            size = Size(barWidth, midBarHeight)
-        )
-
-        // 3. Center Bar (Base X: 440, Y: 80)
-        drawRect(
-            color = color,
-            topLeft = Offset(440f * scaleX, centerY - (centerBarHeight / 2f)),
-            size = Size(barWidth, centerBarHeight)
-        )
-
-        // 4. Mid Right (Base X: 600, Y: 240)
-        drawRect(
-            color = color,
-            topLeft = Offset(600f * scaleX, centerY - (midBarHeight / 2f)),
-            size = Size(barWidth, midBarHeight)
-        )
-
-        // 5. Extreme Right (Base X: 760, Y: 400)
-        drawRect(
-            color = color,
-            topLeft = Offset(760f * scaleX, centerY - (extremeBarHeight / 2f)),
-            size = Size(barWidth, extremeBarHeight)
-        )
-    }
-}
-
-fun handleBulletAutoContinue(
-    oldValue: TextFieldValue,
-    newValue: TextFieldValue
-): TextFieldValue {
-    val oldText = oldValue.text
-    val newText = newValue.text
-
-    // Check if exactly 1 character was added and that character is a newline
-    if (newText.length == oldText.length + 1 &&
-        newValue.selection.start > 0 &&
-        newText[newValue.selection.start - 1] == '\n'
-    ) {
-        val cursorPosition = newValue.selection.start
-        val textBeforeNewline = newText.substring(0, cursorPosition - 1)
-        val lastLine = textBeforeNewline.substringAfterLast('\n')
-
-        // Matches optional leading whitespace (spaces/tabs) followed by bullet marker
-        val bulletRegex = """^(\s*)([-*+]\s+)""".toRegex()
-        val matchResult = bulletRegex.find(lastLine)
-
-        if (matchResult != null) {
-            val indent = matchResult.groupValues[1]
-            val bulletMarker = matchResult.groupValues[2]
-            val fullPrefix = indent + bulletMarker
-
-            // Case 1: Empty bullet item -> delete bullet prefix on enter (exit list)
-            if (lastLine == fullPrefix.dropLastWhile { it == ' ' } || lastLine == fullPrefix) {
-                val startOfLineIndex =
-                    textBeforeNewline.lastIndexOf('\n').let { if (it == -1) 0 else it + 1 }
-                val updatedText =
-                    newText.substring(0, startOfLineIndex) + newText.substring(cursorPosition)
-                return TextFieldValue(
-                    text = updatedText,
-                    selection = TextRange(startOfLineIndex)
-                )
-            }
-
-            // Case 2: Continue list/sub-list with exact matching indentation
-            val updatedText = newText.substring(
-                0,
-                cursorPosition
-            ) + fullPrefix + newText.substring(cursorPosition)
-            val newCursorPos = cursorPosition + fullPrefix.length
-            return TextFieldValue(
-                text = updatedText,
-                selection = TextRange(newCursorPos)
-            )
-        }
-    }
-
-    return newValue
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -924,245 +736,6 @@ fun CreateEntryBottomSheet(
     }
 }
 
-@Composable
-fun MarkdownText(
-    text: String,
-    style: TextStyle,
-    color: Color,
-    metadataMap: Map<String, LinkMetadataEntity> = emptyMap(),
-    onFetchMetadata: (String) -> Unit,
-) {
-    val uriHandler = LocalUriHandler.current
-    val lines = remember(text) { text.split("\n") }
-    val urlRegex = remember { """^<(https?://[^\s>]+)>$""".toRegex() }
-    val bulletRegex = remember { """^(\s*)([-*+]\s+)(.*)$""".toRegex() }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        lines.forEach { line ->
-            val trimmedLine = line.trim()
-            val urlMatch = urlRegex.matchEntire(trimmedLine)
-            val bulletMatch = bulletRegex.matchEntire(line)
-
-            if (urlMatch != null) {
-                val url = urlMatch.groupValues[1]
-                val metadata = metadataMap[url]
-
-                when {
-                    // Case-1: Metadata is available -> Render Card
-                    metadata != null -> {
-                        LinkPreviewCard(
-                            url = metadata.url,
-                            title = metadata.title,
-                            description = metadata.description,
-                            imageUrl = metadata.imageUrl,
-                            onCardClick = { uriHandler.openUri(metadata.url) }
-                        )
-                    }
-
-                    // Case-2: URL exists but missing metadata -> Render <URL> & fetch metadata
-                    url.isNotBlank() -> {
-                        // Fetch metadata via lambda
-                        LaunchedEffect(url) {
-                            onFetchMetadata(url)
-                        }
-                        // Render as clean clickable link
-                        BasicText(
-                            text = buildAnnotatedString { parseInlineLinks("<$url>") },
-                            style = style.copy(color = color)
-                        )
-                    }
-
-                    // Case-3: Empty URL -> Ignore completely
-                    else -> {}
-                }
-            } else {
-                val isBullet = bulletMatch != null
-                val annotatedString = buildAnnotatedString {
-                    when {
-                        trimmedLine.startsWith("# ") -> {
-                            withStyle(
-                                SpanStyle(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = (style.fontSize.value + 4).sp
-                                )
-                            ) {
-                                parseInlineLinks(trimmedLine.removePrefix("# "))
-                            }
-                        }
-
-                        bulletMatch != null -> {
-                            val indent = bulletMatch.groupValues[1]
-                            val bulletContent = bulletMatch.groupValues[3]
-                            withStyle(SpanStyle(fontWeight = FontWeight.Normal)) {
-                                append("$indent•  ")
-                                parseInlineLinks(bulletContent)
-                            }
-                        }
-
-                        else -> parseInlineLinks(line)
-                    }
-                }
-
-                if (annotatedString.isNotEmpty() || line.isEmpty()) {
-                    BasicText(
-                        text = annotatedString,
-                        style = style.copy(color = color),
-                        modifier = Modifier.padding(vertical = if (isBullet) 2.dp else 0.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LinkPreviewCard(
-    url: String,
-    title: String,
-    description: String,
-    imageUrl: String,
-    onCardClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onCardClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-        ) {
-            // Render the scraped web image token on the left if it exists safely
-            if (imageUrl.isNotEmpty()) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = "Link Preview Thumbnail",
-                    modifier = Modifier
-                        .width(128.dp)
-                        .fillMaxHeight(),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            // Title and Description text details on the right side block layout
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = url,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textDecoration = TextDecoration.Underline
-                )
-            }
-        }
-    }
-}
-
-/**
- * Handles checking fallback named Markdown hooks within standard lines
- */
-private fun AnnotatedString.Builder.parseInlineLinks(text: String) {
-    val linkRegex = """(\[([^]]+)]\((https?://[^\s)]+)\))|(<(https?://[^\s>]+)>)""".toRegex()
-    var lastIndex = 0
-
-    linkRegex.findAll(text).forEach { matchResult ->
-        if (matchResult.range.first > lastIndex) {
-            appendLineText(text.substring(lastIndex, matchResult.range.first))
-        }
-
-        val isNamedLink = matchResult.groups[1] != null
-        val displayText =
-            if (isNamedLink) matchResult.groups[2]!!.value else matchResult.groups[5]!!.value
-        val urlTarget =
-            if (isNamedLink) matchResult.groups[3]!!.value else matchResult.groups[5]!!.value
-
-        withLink(
-            link = LinkAnnotation.Url(
-                url = urlTarget,
-                styles = TextLinkStyles(
-                    style = SpanStyle(
-                        color = Color(0xFF2196F3),
-                        textDecoration = TextDecoration.Underline
-                    )
-                )
-            )
-        ) {
-            appendLineText(displayText)
-        }
-
-        lastIndex = matchResult.range.last + 1
-    }
-
-    if (lastIndex < text.length) {
-        appendLineText(text.substring(lastIndex))
-    }
-}
-
-// Internal extension function to continue parsing **bold** and *italic* inside any line type
-private fun AnnotatedString.Builder.appendLineText(lineText: String) {
-    var currentIndex = 0
-    val pattern = Regex("(\\*\\*.*?\\*\\*|\\*.*?\\*)")
-    val matches = pattern.findAll(lineText)
-
-    for (match in matches) {
-        if (match.range.first > currentIndex) {
-            append(lineText.substring(currentIndex, match.range.first))
-        }
-
-        val token = match.value
-        when {
-            token.startsWith("**") && token.endsWith("**") -> {
-                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                    append(token.removeSurrounding("**"))
-                }
-            }
-
-            token.startsWith("*") && token.endsWith("*") -> {
-                withStyle(style = SpanStyle(fontStyle = FontStyle.Italic)) {
-                    append(token.removeSurrounding("*"))
-                }
-            }
-
-            else -> append(token)
-        }
-        currentIndex = match.range.last + 1
-    }
-
-    if (currentIndex < lineText.length) {
-        append(lineText.substring(currentIndex))
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailEntryBottomSheet(
@@ -1394,446 +967,3 @@ fun DetailEntryBottomSheet(
     }
 }
 
-@Composable
-private fun MissingMediaCard(
-    mediaType: EntryMediaType,
-    onClearMediaTag: () -> Unit
-) {
-    val mediaTypeName = when (mediaType) {
-        EntryMediaType.PHOTO -> "Photo"
-        EntryMediaType.VIDEO -> "Video"
-        EntryMediaType.AUDIO -> "Audio file"
-        EntryMediaType.LINK -> "Link"
-        EntryMediaType.TEXT -> "Media"
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
-        ),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_close), // error / warning icon
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error
-                )
-                Text(
-                    text = stringResource(R.string.file_has_been_deleted_or_moved, mediaTypeName),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
-            }
-
-            TextButton(onClick = onClearMediaTag) {
-                Text(
-                    text = stringResource(R.string.clear_tag, mediaTypeName),
-                    color = MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ZoomableImageView(
-    imagePath: String,
-    onDismiss: () -> Unit
-) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .pointerInput(Unit) {
-                    // Double-tap to toggle zoom (1x <-> 2.5x)
-                    detectTapGestures(
-                        onDoubleTap = { _ ->
-                            if (scale > 1f) {
-                                scale = 1f
-                                offset = Offset.Zero
-                            } else {
-                                scale = 2.5f
-                                offset = Offset.Zero
-                            }
-                        },
-                        onTap = {
-                            // Single tap anywhere on black background to dismiss
-                            if (scale == 1f) {
-                                onDismiss()
-                            }
-                        }
-                    )
-                }
-                .pointerInput(Unit) {
-                    // Multi-finger pinch to zoom & pan
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(1f, 10f) // Cap zoom between 1x and 10x
-
-                        if (scale > 1f) {
-                            // Pan only when zoomed in
-                            offset += pan
-                        } else {
-                            offset = Offset.Zero
-                        }
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Image(
-                painter = rememberAsyncImagePainter(File(imagePath)),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = offset.x
-                        translationY = offset.y
-                    }
-            )
-
-            // Subtle close button at top-right
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 16.dp, end = 16.dp)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_close),
-                    contentDescription = stringResource(R.string.close_fullscreen),
-                    tint = FadedGreyClose
-                )
-            }
-        }
-    }
-}
-
-@androidx.annotation.OptIn(UnstableApi::class)
-@Composable
-fun LoopingVideoPlayer(videoPath: String) {
-    val context = LocalContext.current
-    // Access the host activity's lifecycle state
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var isFullscreen by remember { mutableStateOf(false) }
-
-    // Master unified ExoPlayer instance tied to this lifecycle
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(File(videoPath).toURI().toString()))
-            repeatMode = Player.REPEAT_MODE_ALL
-            playWhenReady = true
-            prepare()
-        }
-    }
-
-    DisposableEffect(lifecycleOwner) {
-        // Prevent exoplayer from running in background
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                // The app went to background or user switched apps -> Pause the hardware stream
-                Lifecycle.Event.ON_PAUSE -> exoPlayer.pause()
-                // User came back to the app foreground -> Resume playback smoothly
-                Lifecycle.Event.ON_RESUME -> exoPlayer.play()
-                else -> {}
-            }
-        }
-        // Register our observer onto the activity lifecycle
-        lifecycleOwner.lifecycle.addObserver(observer)
-        // Clean up: unregister observer and completely release the video decoder on view death
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            exoPlayer.release()
-        }
-    }
-
-    // Standard inline player view
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(360.dp)
-            .clip(RoundedCornerShape(12.dp))
-    ) {
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply { useController = false }
-            },
-            update = { playerView ->
-                if (isFullscreen) {
-                    // If full-screen is active, release the player from this view
-                    // so the dialog's PlayerView can claim the surface safely
-                    playerView.player = null
-                } else {
-                    // When coming back, explicitly re-attach the engine to force a surface redraw
-                    if (playerView.player != exoPlayer) {
-                        // Clear old texture cache reference
-                        playerView.player = null
-                        playerView.player = exoPlayer
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Overlay Box to handle gestures reliably without blocking playback surface
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = {
-                            if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                        },
-                        onDoubleTap = {
-                            // Ensure player is playing when opening full screen
-                            exoPlayer.play()
-                            isFullscreen = true
-                        }
-                    )
-                }
-        )
-    }
-
-    // Fullscreen Zoomable Video Dialog
-    if (isFullscreen) {
-        Dialog(
-            onDismissRequest = { isFullscreen = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            var scale by remember { mutableFloatStateOf(1f) }
-            var offset by remember { mutableStateOf(Offset.Zero) }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onDoubleTap = {
-                                isFullscreen = false
-//                                if (scale > 1f) {
-//                                    scale = 1f
-//                                    offset = Offset.Zero
-//                                } else {
-//                                    scale = 2.5f
-//                                    offset = Offset.Zero
-//                                }
-                            },
-                            onTap = {
-                                if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                            }
-                        )
-                    }
-                    .pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            scale = (scale * zoom).coerceIn(0.9f, 8f)
-
-                            if (scale > 1f) {
-                                offset += pan
-                            } else {
-                                offset = Offset.Zero
-                            }
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                AndroidView(
-                    factory = { ctx ->
-                        PlayerView(ctx).apply { useController = false }
-                    },
-                    update = { fullscreenPlayerView ->
-                        // Claim the player engine for the fullscreen view layer
-                        if (fullscreenPlayerView.player != exoPlayer) {
-                            fullscreenPlayerView.player = exoPlayer
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                            translationX = offset.x
-                            translationY = offset.y
-                        }
-                )
-
-                IconButton(
-                    onClick = { isFullscreen = false },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 16.dp, end = 16.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_close),
-                        contentDescription = stringResource(R.string.close_fullscreen),
-                        tint = FadedGreyClose
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun AudioPlayerRegion(audioPath: String) {
-    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
-    var isPlaying by remember { mutableStateOf(false) }
-    var currentPosition by remember { mutableFloatStateOf(0f) }
-    var totalDuration by remember { mutableFloatStateOf(0f) }
-
-    // Initialize MediaPlayer instance bound to the life of this view
-    LaunchedEffect(audioPath) {
-        val player = MediaPlayer().apply {
-            setDataSource(File(audioPath).absolutePath)
-            prepare()
-            start()
-        }
-        mediaPlayer = player
-        totalDuration = player.duration.toFloat()
-        isPlaying = true
-
-        // Set up completion listener to clean up UI state when playback ends naturally
-        player.setOnCompletionListener {
-            isPlaying = false
-            currentPosition = 0f
-        }
-    }
-
-    // Coroutine loop to track and update the seek bar thumb track dynamically
-    LaunchedEffect(isPlaying) {
-        if (isPlaying) {
-            while (isPlaying && mediaPlayer != null) {
-                mediaPlayer?.let {
-                    currentPosition = it.currentPosition.toFloat()
-                }
-                delay(100.milliseconds) // Poll every 100 milliseconds for fluid feedback transitions
-            }
-        }
-    }
-
-    // Clean up and free decoder hardware instances on sheet dismiss
-    DisposableEffect(Unit) {
-        onDispose {
-            mediaPlayer?.apply {
-                stop()
-                release()
-            }
-            mediaPlayer = null
-        }
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        ),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Play / Pause Toggle Action Node
-            IconButton(
-                onClick = {
-                    mediaPlayer?.let { player ->
-                        if (player.isPlaying) {
-                            player.pause()
-                            isPlaying = false
-                        } else {
-                            player.start()
-                            isPlaying = true
-                        }
-                    }
-                },
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    painter = painterResource(
-                        id = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-                    ),
-                    contentDescription = if (isPlaying) stringResource(R.string.pause_audio) else stringResource(
-                        R.string.play_audio
-                    ),
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            // Stream Progress Slider Tracker Panel
-            Column(modifier = Modifier.weight(1f)) {
-                Slider(
-                    value = currentPosition,
-                    valueRange = 0f..totalDuration.coerceAtLeast(1f),
-                    onValueChange = { seekTarget ->
-                        currentPosition = seekTarget
-                        mediaPlayer?.seekTo(seekTarget.toInt())
-                    },
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Optional: Dynamic duration timestamp tracker layout strings
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = formatMs(currentPosition.toInt()),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = formatMs(totalDuration.toInt()),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
-// Simple internal helper to convert milliseconds to standard mm:ss format strings cleanly
-@SuppressLint("DefaultLocale")
-private fun formatMs(ms: Int): String {
-    val seconds = (ms / 1000) % 60
-    val minutes = (ms / (1000 * 60)) % 60
-    return String.format("%02d:%02d", minutes, seconds)
-}

@@ -15,7 +15,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import ash.app.journal.ui.JournalViewModel
-import ash.app.journal.ui.MainJournalScreen
+import ash.app.journal.ui.screens.MainJournalScreen
 import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.theme.JourNaLTheme
 import java.io.File
