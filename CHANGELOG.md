@@ -26,3 +26,4 @@
 - Increased size of filter chip icons
 - Fixed filter chip icon movement when their count changed from double digits to single digit
 - Added a horizontal divider between color and media type filter chip rows
+- Search enhancement to handle queries with whitespace

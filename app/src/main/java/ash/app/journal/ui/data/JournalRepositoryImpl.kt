@@ -38,7 +38,7 @@ class JournalRepositoryImpl(
         query: String,
         colorTag: EntryColorTag?,
         mediaType: EntryMediaType?
-    ): Flow<List<JournalEntry>> = journalDao.searchEntries(query, colorTag, mediaType)
+    ): Flow<List<JournalEntry>> = journalDao.searchEntries(query, query.trim(), colorTag, mediaType)
 
     override fun getColorTagCounts(mediaType: EntryMediaType?): Flow<List<ColorTagCount>> =
         journalDao.getColorTagCounts(mediaType)

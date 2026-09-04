@@ -35,13 +35,19 @@ interface JournalDao {
     // --- Search Query Matching Title or Details (Strict Non-Null Tag Support) ---
     @Query("""
         SELECT * FROM journal_entries 
-        WHERE (title LIKE '%' || :query || '%' OR details LIKE '%' || :query || '%')
+        WHERE (
+            title LIKE '%' || :query || '%' 
+            OR details LIKE '%' || :query || '%'
+            OR title LIKE '%' || :trimmedQuery || '%' 
+            OR details LIKE '%' || :trimmedQuery || '%'
+        )
         AND (:colorTag IS NULL OR colorTag = :colorTag)
         AND (:mediaType IS NULL OR mediaType = :mediaType)
         ORDER BY timestamp DESC
     """)
     fun searchEntries(
         query: String,
+        trimmedQuery: String,
         colorTag: EntryColorTag? = null,
         mediaType: EntryMediaType? = null
     ): Flow<List<JournalEntry>>

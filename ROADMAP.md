@@ -1,12 +1,20 @@
-# 📋 RoadMap v1.0.3
+# 📋 RoadMap v1.0.4
 
 ## 🛠️ Features
 
-- Settings Screen
-  - Screen Lock for Privacy
-  - Import / Export entries functionality
-  - Color chips naming
-  - Delete all entries
+- Reminder entry type with notifications
+- Alternate carousel view for entries
+- Settings screen, which enables the user,
+  - to enter their details for a personalized experience
+  - to switch between carousel view and list view
+  - to set a biometric app lock
+  - to export or import notes, as `.db` or `.json`
+  - to delete all entries
+  - to switch between dark and light mode
+- Dynamic Markdown toolbar
+- Timeline / Date separators
+- Home screen carousel header card to highlight user achievements
+- Privacy notes vault
 - On home screen,
   - Summary View: Show only last 3-5 entries
   - Dashboard View: Show weekly post count & total post count
@@ -18,15 +26,13 @@
   - Calendar View
   - Media Gallery View
   - "On this day" carousel card
-- Create reminder notifications
-- Search functionality
 
 ## 🎨️ Enhancements
 
 - Improve app icon
 - Layout Mode Switcher: Toggle between compact list view and a visual 2-column media grid.
 - Full screen detail page for each entry (instead of a bottom sheet)
-- Add List, Reminder and Link subtypes for entries
+- Add rich text editor support in details
 - Add optional expiry date to auto-delete entries
 - Move all colors & text to a single file 🗹☐🗷
 - Landscape mode possibility or Portrait mode only
