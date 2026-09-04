@@ -11,7 +11,6 @@
   - to export or import notes, as `.db` or `.json`
   - to delete all entries
   - to switch between dark and light mode
-- Dynamic Markdown toolbar
 - Timeline / Date separators
 - Home screen carousel header card to highlight user achievements
 - Privacy notes vault
