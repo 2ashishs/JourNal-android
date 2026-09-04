@@ -1,7 +1,9 @@
 package ash.app.journal.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -95,10 +97,36 @@ fun MarkdownText(
                     // Case-3: Empty URL -> Ignore completely
                     else -> {}
                 }
+            } else if (trimmedLine.startsWith("> ")) {
+                // --- BLOCKQUOTE WITH ACCENT VERTICAL BAR ---
+                val quoteContent = trimmedLine.removePrefix("> ").trim()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(3.5.dp)
+                            .height(IntrinsicSize.Min)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+                    )
+                    BasicText(
+                        text = buildAnnotatedString {
+                            withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                                parseInlineLinks(quoteContent)
+                            }
+                        },
+                        style = style.copy(color = color.copy(alpha = 0.85f))
+                    )
+                }
             } else {
                 val isBullet = bulletMatch != null
                 val annotatedString = buildAnnotatedString {
                     when {
+                        // H1 Heading
                         trimmedLine.startsWith("# ") -> {
                             withStyle(
                                 SpanStyle(
@@ -109,7 +137,18 @@ fun MarkdownText(
                                 parseInlineLinks(trimmedLine.removePrefix("# "))
                             }
                         }
-
+                        // H2 Secondary Heading
+                        trimmedLine.startsWith("## ") -> {
+                            withStyle(
+                                SpanStyle(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = (style.fontSize.value + 2).sp
+                                )
+                            ) {
+                                parseInlineLinks(trimmedLine.removePrefix("## "))
+                            }
+                        }
+                        // Bullet Lists (*, +, -)
                         bulletMatch != null -> {
                             val indent = bulletMatch.groupValues[1]
                             val bulletContent = bulletMatch.groupValues[3]
@@ -118,7 +157,7 @@ fun MarkdownText(
                                 parseInlineLinks(bulletContent)
                             }
                         }
-
+                        // Otherwise parse for links
                         else -> parseInlineLinks(line)
                     }
                 }
@@ -205,9 +244,7 @@ private fun LinkPreviewCard(
     }
 }
 
-/**
- * Handles checking fallback named Markdown hooks within standard lines
- */
+// Handles checking fallback named Markdown hooks within standard lines
 private fun AnnotatedString.Builder.parseInlineLinks(text: String) {
     val linkRegex = """(\[([^]]+)]\((https?://[^\s)]+)\))|(<(https?://[^\s>]+)>)""".toRegex()
     var lastIndex = 0
@@ -245,7 +282,7 @@ private fun AnnotatedString.Builder.parseInlineLinks(text: String) {
     }
 }
 
-// Internal extension function to continue parsing **bold** and *italic* inside any line type
+// Extension function to continue parsing **bold** and *italic* inside any line type
 private fun AnnotatedString.Builder.appendLineText(lineText: String) {
     var currentIndex = 0
     val pattern = Regex("(\\*\\*.*?\\*\\*|\\*.*?\\*)")
@@ -258,18 +295,19 @@ private fun AnnotatedString.Builder.appendLineText(lineText: String) {
 
         val token = match.value
         when {
+            // Bold
             token.startsWith("**") && token.endsWith("**") -> {
                 withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
                     append(token.removeSurrounding("**"))
                 }
             }
-
+            // Italics
             token.startsWith("*") && token.endsWith("*") -> {
                 withStyle(style = SpanStyle(fontStyle = FontStyle.Italic)) {
                     append(token.removeSurrounding("*"))
                 }
             }
-
+            // as-is
             else -> append(token)
         }
         currentIndex = match.range.last + 1

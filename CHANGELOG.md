@@ -5,3 +5,4 @@
 - Created a new package `journal.ui.screens` for all screens and their elements
 - Moved `HomeScreen` and `SearchScreen` into the `screens` package
 - Separated out screen elements from `HomeScreen` into `EntryCreateElements`, `EntryDetailsElements` and `MarkdownText`
+- `MarkdownText` improvements: added support for `>` Quote blocks, `##` secondary header; code refactorings.
