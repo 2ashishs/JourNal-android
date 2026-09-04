@@ -11,3 +11,4 @@
 - Code line and code block support added in `MarkdownText`
 - Tab indent support in `MarkdownToolbar`
 - Icon enhancement in `MarkdownToolbar`
+- `CreateEntryBottomSheet` is now fully expanded (for clarity)

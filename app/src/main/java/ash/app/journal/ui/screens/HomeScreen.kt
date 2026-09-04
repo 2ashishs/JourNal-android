@@ -429,9 +429,14 @@ fun CreateEntryBottomSheet(
         )
     }
 
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        sheetState = sheetState
     ) {
         Column(
             modifier = Modifier
