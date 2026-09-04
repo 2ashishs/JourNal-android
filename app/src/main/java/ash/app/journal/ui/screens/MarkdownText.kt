@@ -2,6 +2,7 @@ package ash.app.journal.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.Card
@@ -32,6 +34,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -43,6 +46,11 @@ import androidx.compose.ui.unit.sp
 import ash.app.journal.ui.models.LinkMetadataEntity
 import coil3.compose.AsyncImage
 
+private sealed interface MarkdownBlock {
+    data class CodeFence(val code: String) : MarkdownBlock
+    data class RegularLine(val line: String) : MarkdownBlock
+}
+
 @Composable
 fun MarkdownText(
     text: String,
@@ -52,7 +60,9 @@ fun MarkdownText(
     onFetchMetadata: (String) -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
-    val lines = remember(text) { text.split("\n") }
+
+    // Parse text into regular lines and grouped fenced code blocks
+    val blocks = remember(text) { parseMarkdownBlocks(text) }
     val urlRegex = remember { """^<(https?://[^\s>]+)>$""".toRegex() }
     val bulletRegex = remember { """^(\s*)([-*+]\s+)(.*)$""".toRegex() }
 
@@ -60,118 +70,184 @@ fun MarkdownText(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        lines.forEach { line ->
-            val trimmedLine = line.trim()
-            val urlMatch = urlRegex.matchEntire(trimmedLine)
-            val bulletMatch = bulletRegex.matchEntire(line)
-
-            if (urlMatch != null) {
-                val url = urlMatch.groupValues[1]
-                val metadata = metadataMap[url]
-
-                when {
-                    // Case-1: Metadata is available -> Render Card
-                    metadata != null -> {
-                        LinkPreviewCard(
-                            url = metadata.url,
-                            title = metadata.title,
-                            description = metadata.description,
-                            imageUrl = metadata.imageUrl,
-                            onCardClick = { uriHandler.openUri(metadata.url) }
-                        )
-                    }
-
-                    // Case-2: URL exists but missing metadata -> Render <URL> & fetch metadata
-                    url.isNotBlank() -> {
-                        // Fetch metadata via lambda
-                        LaunchedEffect(url) {
-                            onFetchMetadata(url)
-                        }
-                        // Render as clean clickable link
-                        BasicText(
-                            text = buildAnnotatedString { parseInlineLinks("<$url>") },
-                            style = style.copy(color = color)
-                        )
-                    }
-
-                    // Case-3: Empty URL -> Ignore completely
-                    else -> {}
-                }
-            } else if (trimmedLine.startsWith("> ")) {
-                // --- BLOCKQUOTE WITH ACCENT VERTICAL BAR ---
-                val quoteContent = trimmedLine.removePrefix("> ").trim()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
+        blocks.forEach { block ->
+            when (block) {
+                // --- MULTI-LINE CODE BLOCK ---
+                is MarkdownBlock.CodeFence -> {
+                    Card(
                         modifier = Modifier
-                            .width(3.5.dp)
-                            .height(IntrinsicSize.Min)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
-                    )
-                    BasicText(
-                        text = buildAnnotatedString {
-                            withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                                parseInlineLinks(quoteContent)
-                            }
-                        },
-                        style = style.copy(color = color.copy(alpha = 0.85f))
-                    )
-                }
-            } else {
-                val isBullet = bulletMatch != null
-                val annotatedString = buildAnnotatedString {
-                    when {
-                        // H1 Heading
-                        trimmedLine.startsWith("# ") -> {
-                            withStyle(
-                                SpanStyle(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = (style.fontSize.value + 4).sp
-                                )
-                            ) {
-                                parseInlineLinks(trimmedLine.removePrefix("# "))
-                            }
-                        }
-                        // H2 Secondary Heading
-                        trimmedLine.startsWith("## ") -> {
-                            withStyle(
-                                SpanStyle(
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = (style.fontSize.value + 2).sp
-                                )
-                            ) {
-                                parseInlineLinks(trimmedLine.removePrefix("## "))
-                            }
-                        }
-                        // Bullet Lists (*, +, -)
-                        bulletMatch != null -> {
-                            val indent = bulletMatch.groupValues[1]
-                            val bulletContent = bulletMatch.groupValues[3]
-                            withStyle(SpanStyle(fontWeight = FontWeight.Normal)) {
-                                append("$indent•  ")
-                                parseInlineLinks(bulletContent)
-                            }
-                        }
-                        // Otherwise parse for links
-                        else -> parseInlineLinks(line)
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        )
+                    ) {
+                        Text(
+                            text = block.code,
+                            style = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(12.dp)
+                        )
                     }
                 }
 
-                if (annotatedString.isNotEmpty() || line.isEmpty()) {
-                    BasicText(
-                        text = annotatedString,
-                        style = style.copy(color = color),
-                        modifier = Modifier.padding(vertical = if (isBullet) 2.dp else 0.dp)
-                    )
+                // --- REGULAR MARKDOWN LINE ---
+                is MarkdownBlock.RegularLine -> {
+                    val line = block.line
+                    val trimmedLine = line.trim()
+                    val urlMatch = urlRegex.matchEntire(trimmedLine)
+                    val bulletMatch = bulletRegex.matchEntire(line)
+
+                    if (urlMatch != null) {
+                        val url = urlMatch.groupValues[1]
+                        val metadata = metadataMap[url]
+
+                        when {
+                            // Case-1: Metadata is available -> Render Card
+                            metadata != null -> {
+                                LinkPreviewCard(
+                                    url = metadata.url,
+                                    title = metadata.title,
+                                    description = metadata.description,
+                                    imageUrl = metadata.imageUrl,
+                                    onCardClick = { uriHandler.openUri(metadata.url) }
+                                )
+                            }
+
+                            // Case-2: URL exists but missing metadata -> Render <URL> & fetch metadata
+                            url.isNotBlank() -> {
+                                // Fetch metadata via lambda
+                                LaunchedEffect(url) {
+                                    onFetchMetadata(url)
+                                }
+                                // Render as clean clickable link
+                                BasicText(
+                                    text = buildAnnotatedString { parseInlineElements("<$url>") },
+                                    style = style.copy(color = color)
+                                )
+                            }
+
+                            // Case-3: Empty URL -> Ignore completely
+                            else -> {}
+                        }
+                    } else if (trimmedLine.startsWith("> ")) {
+                        // BLOCKQUOTE
+                        val quoteContent = trimmedLine.removePrefix("> ").trim()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(3.5.dp)
+                                    .height(IntrinsicSize.Min)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+                            )
+                            BasicText(
+                                text = buildAnnotatedString {
+                                    withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                                        parseInlineElements(quoteContent)
+                                    }
+                                },
+                                style = style.copy(color = color.copy(alpha = 0.85f))
+                            )
+                        }
+                    } else {
+                        val isBullet = bulletMatch != null
+                        val annotatedString = buildAnnotatedString {
+                            when {
+                                // H1 Heading
+                                trimmedLine.startsWith("# ") -> {
+                                    withStyle(
+                                        SpanStyle(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = (style.fontSize.value + 4).sp
+                                        )
+                                    ) {
+                                        parseInlineElements(trimmedLine.removePrefix("# "))
+                                    }
+                                }
+                                // H2 Secondary Heading
+                                trimmedLine.startsWith("## ") -> {
+                                    withStyle(
+                                        SpanStyle(
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = (style.fontSize.value + 2).sp
+                                        )
+                                    ) {
+                                        parseInlineElements(trimmedLine.removePrefix("## "))
+                                    }
+                                }
+                                // Bullet Lists (*, +, -)
+                                bulletMatch != null -> {
+                                    val indent = bulletMatch.groupValues[1]
+                                    val bulletContent = bulletMatch.groupValues[3]
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Normal)) {
+                                        append("$indent•  ")
+                                        parseInlineElements(bulletContent)
+                                    }
+                                }
+                                // Otherwise parse for links
+                                else -> parseInlineElements(line)
+                            }
+                        }
+
+                        if (annotatedString.isNotEmpty() || line.isEmpty()) {
+                            BasicText(
+                                text = annotatedString,
+                                style = style.copy(color = color),
+                                modifier = Modifier.padding(vertical = if (isBullet) 2.dp else 0.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+// Pre-process text into either fenced code blocks or regular lines
+private fun parseMarkdownBlocks(text: String): List<MarkdownBlock> {
+    val result = mutableListOf<MarkdownBlock>()
+    val lines = text.split("\n")
+    var insideCodeFence = false
+    val currentCodeLines = StringBuilder()
+
+    for (line in lines) {
+        val trimmed = line.trim()
+        if (trimmed.startsWith("```")) {
+            if (insideCodeFence) {
+                // Closing fence
+                result.add(MarkdownBlock.CodeFence(currentCodeLines.toString().trimEnd()))
+                currentCodeLines.clear()
+                insideCodeFence = false
+            } else {
+                // Opening fence
+                insideCodeFence = true
+            }
+        } else if (insideCodeFence) {
+            if (currentCodeLines.isNotEmpty()) currentCodeLines.append("\n")
+            currentCodeLines.append(line)
+        } else {
+            result.add(MarkdownBlock.RegularLine(line))
+        }
+    }
+
+    if (insideCodeFence && currentCodeLines.isNotEmpty()) {
+        result.add(MarkdownBlock.CodeFence(currentCodeLines.toString().trimEnd()))
+    }
+
+    return result
 }
 
 @Composable
@@ -244,14 +320,14 @@ private fun LinkPreviewCard(
     }
 }
 
-// Handles checking fallback named Markdown hooks within standard lines
-private fun AnnotatedString.Builder.parseInlineLinks(text: String) {
+// Parses inline links, bold, italic, and inline code snippet
+private fun AnnotatedString.Builder.parseInlineElements(text: String) {
     val linkRegex = """(\[([^]]+)]\((https?://[^\s)]+)\))|(<(https?://[^\s>]+)>)""".toRegex()
     var lastIndex = 0
 
     linkRegex.findAll(text).forEach { matchResult ->
         if (matchResult.range.first > lastIndex) {
-            appendLineText(text.substring(lastIndex, matchResult.range.first))
+            appendFormattedTokens(text.substring(lastIndex, matchResult.range.first))
         }
 
         val isNamedLink = matchResult.groups[1] != null
@@ -271,21 +347,22 @@ private fun AnnotatedString.Builder.parseInlineLinks(text: String) {
                 )
             )
         ) {
-            appendLineText(displayText)
+            appendFormattedTokens(displayText)
         }
 
         lastIndex = matchResult.range.last + 1
     }
 
     if (lastIndex < text.length) {
-        appendLineText(text.substring(lastIndex))
+        appendFormattedTokens(text.substring(lastIndex))
     }
 }
 
-// Extension function to continue parsing **bold** and *italic* inside any line type
-private fun AnnotatedString.Builder.appendLineText(lineText: String) {
+// Parses bold (**text**), italic (*text*), and inline code, in any line
+private fun AnnotatedString.Builder.appendFormattedTokens(lineText: String) {
     var currentIndex = 0
-    val pattern = Regex("(\\*\\*.*?\\*\\*|\\*.*?\\*)")
+    // Matches inline code (`...`), bold (**...**), or italic (*...*)
+    val pattern = Regex("(`[^`]+`|\\*\\*.*?\\*\\*|\\*.*?\\*)")
     val matches = pattern.findAll(lineText)
 
     for (match in matches) {
@@ -295,6 +372,18 @@ private fun AnnotatedString.Builder.appendLineText(lineText: String) {
 
         val token = match.value
         when {
+            // Inline Code
+            token.startsWith("`") && token.endsWith("`") && token.length >= 2 -> {
+                withStyle(
+                    style = SpanStyle(
+                        fontFamily = FontFamily.Monospace,
+                        background = Color.Gray.copy(alpha = 0.2f),
+                        fontSize = 13.sp
+                    )
+                ) {
+                    append(" ${token.removeSurrounding("`")} ")
+                }
+            }
             // Bold
             token.startsWith("**") && token.endsWith("**") -> {
                 withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {

@@ -8,3 +8,6 @@
 - `MarkdownText` improvements: added support for `>` Quote blocks, `##` secondary header; code refactorings.
 - `MarkdownToolbar` along with `MarkdownToolbarUtils` added to `CreateEntryBottomSheet`
 - Media chips icon row issue fixed in `CreateEntryBottomSheet`
+- Code line and code block support added in `MarkdownText`
+- Tab indent support in `MarkdownToolbar`
+- Icon enhancement in `MarkdownToolbar`

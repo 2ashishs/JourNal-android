@@ -20,8 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -64,11 +62,10 @@ fun MarkdownToolbar(
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onValueChange(MarkdownToolbarUtils.wrapSelection(value, "*"))
             }) {
-                Text(
-                    "I",
-                    fontStyle = FontStyle.Italic,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                Icon(
+                    painter = painterResource(R.drawable.ic_italic_text),
+                    contentDescription = "Bullet list",
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
@@ -93,7 +90,11 @@ fun MarkdownToolbar(
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onValueChange(MarkdownToolbarUtils.toggleLinePrefix(value, "- "))
             }) {
-                Text("•—", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Icon(
+                    painter = painterResource(R.drawable.ic_list_bulleted),
+                    contentDescription = "Bullet list",
+                    modifier = Modifier.size(18.dp)
+                )
             }
 
             // Quote (> quote)
@@ -109,11 +110,10 @@ fun MarkdownToolbar(
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onValueChange(MarkdownToolbarUtils.wrapSelection(value, "`"))
             }) {
-                Text(
-                    "<>",
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp
+                Icon(
+                    painter = painterResource(R.drawable.ic_code_line),
+                    contentDescription = "Inline Code",
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
@@ -125,6 +125,18 @@ fun MarkdownToolbar(
                 Icon(
                     painter = painterResource(R.drawable.ic_media_link),
                     contentDescription = "Insert Link",
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            // Tab Indent (2 spaces)
+            ToolbarButton(onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onValueChange(MarkdownToolbarUtils.indentText(value))
+            }) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_tab_indent),
+                    contentDescription = "Tab Indent",
                     modifier = Modifier.size(18.dp)
                 )
             }
