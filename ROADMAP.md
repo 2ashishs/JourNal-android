@@ -3,6 +3,7 @@
 ## 🛠️ Features
 
 - Reminder entry type with notifications
+- Expense tracker entry type
 - Alternate carousel view for entries
 - Settings screen, which enables the user,
   - to enter their details for a personalized experience
@@ -28,10 +29,9 @@
 
 ## 🎨️ Enhancements
 
-- Improve app icon
+- Revamped app icon
 - Layout Mode Switcher: Toggle between compact list view and a visual 2-column media grid.
 - Full screen detail page for each entry (instead of a bottom sheet)
-- Add rich text editor support in details
 - Add optional expiry date to auto-delete entries
 - Move all colors & text to a single file 🗹☐🗷
 - Landscape mode possibility or Portrait mode only
