@@ -65,6 +65,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -74,6 +76,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -386,6 +389,8 @@ fun CreateEntryBottomSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val detailsFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
     var tempPhotoPath by remember { mutableStateOf<String?>(null) }
     var tempVideoPath by remember { mutableStateOf<String?>(null) }
     var tempVideoUri by remember { mutableStateOf<Uri?>(null) }
@@ -481,7 +486,8 @@ fun CreateEntryBottomSheet(
                 label = { Text(stringResource(R.string.details)) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 96.dp, max = 280.dp),
+                    .heightIn(min = 96.dp, max = 280.dp)
+                    .focusRequester(detailsFocusRequester),
                 minLines = 2,
                 maxLines = 8,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
@@ -492,6 +498,8 @@ fun CreateEntryBottomSheet(
                 onValueChange = { updated ->
                     detailsTextFieldValue = updated
                     onDetailsChange(updated.text)
+                    detailsFocusRequester.requestFocus()
+                    keyboardController?.show()
                 }
             )
 

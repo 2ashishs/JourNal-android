@@ -12,3 +12,4 @@
 - Tab indent support in `MarkdownToolbar`
 - Icon enhancement in `MarkdownToolbar`
 - `CreateEntryBottomSheet` is now fully expanded (for clarity)
+- In `CreateEntryBottomSheet` now the "Details" section gets keyboard focus, if a `MarkdownToolbar` button is pressed
