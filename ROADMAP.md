@@ -35,6 +35,8 @@
 - Add optional expiry date to auto-delete entries
 - Move all colors & text to a single file 🗹☐🗷
 - Landscape mode possibility or Portrait mode only
+- Back button before Search pill
+- Audio recording UI/UX (possibly a separate screen)
 
 ## 🐛 Fixes
 
