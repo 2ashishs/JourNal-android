@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ash.app.journal.notifications.ReminderScheduler
 import ash.app.journal.ui.data.JournalRepository
 import ash.app.journal.ui.data.LinkMetadataRepository
 import ash.app.journal.ui.models.EntryColorTag
@@ -225,9 +226,13 @@ class JournalViewModel(
         }
     }
 
+    fun onReminderTimestampSelected(timestamp: Long?) {
+        _draftState.update { it.copy(reminderTimestamp = timestamp) }
+    }
+
     // --- Database Actions ---
 
-    fun saveCurrentEntry() {
+    fun saveCurrentEntry(context: Context) {
         val currentDraft = _draftState.value
 
         val rawUrlRegex = """https?://[^\s<>]+""".toRegex()
@@ -261,7 +266,7 @@ class JournalViewModel(
         }
 
         viewModelScope.launch {
-            if (currentDraft.editingEntryId != null) {
+            val savedEntryId = if (currentDraft.editingEntryId != null) {
                 // --- EDIT ENTRY MODE ---
                 val updatedEntry = JournalEntry(
                     id = currentDraft.editingEntryId, // Matching ID triggers Room's REPLACE / Update mechanism
@@ -271,6 +276,8 @@ class JournalViewModel(
                     mediaPath = currentDraft.capturedMediaPath,
                     mediaType = finalMediaType,
                     timestamp = System.currentTimeMillis(),
+                    reminderTimestamp = currentDraft.reminderTimestamp,
+                    isReminderCompleted = false,
                 )
                 repository.insertEntry(updatedEntry)
             } else {
@@ -282,6 +289,8 @@ class JournalViewModel(
                     mediaPath = currentDraft.capturedMediaPath,
                     mediaType = finalMediaType,
                     timestamp = System.currentTimeMillis(),
+                    reminderTimestamp = currentDraft.reminderTimestamp,
+                    isReminderCompleted = false,
                 )
                 repository.insertEntry(newEntry)
             }
@@ -291,13 +300,27 @@ class JournalViewModel(
                 fetchAndCacheMetadataForUrl(url)
             }
 
+            // 5. Schedule or cancel alarm
+            if ((currentDraft.reminderTimestamp != null) && (currentDraft.reminderTimestamp > System.currentTimeMillis())) {
+                ReminderScheduler.scheduleReminder(
+                    context = context,
+                    entryId = savedEntryId,
+                    title = finalTitle,
+                    details = processedDetails,
+                    reminderTimeMillis = currentDraft.reminderTimestamp
+                )
+            } else {
+                ReminderScheduler.cancelReminder(context, savedEntryId)
+            }
+
             // Clear state back to default after saving
             _draftState.value = JournalDraftState()
         }
     }
 
-    fun deleteEntry(entry: JournalEntry) {
+    fun deleteEntry(context: Context, entry: JournalEntry) {
         viewModelScope.launch {
+            ReminderScheduler.cancelReminder(context, entry.id)
             repository.deleteEntry(entry)
         }
     }
@@ -315,6 +338,7 @@ class JournalViewModel(
                 selectedColorTag = entry.colorTag,
                 capturedMediaPath = if (isMediaFileAvailable(entry)) entry.mediaPath else null,
                 capturedMediaType = if (isMediaFileAvailable(entry)) entry.mediaType else EntryMediaType.TEXT,
+                reminderTimestamp = entry.reminderTimestamp,
             )
         }
     }

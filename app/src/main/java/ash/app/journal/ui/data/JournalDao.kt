@@ -33,7 +33,8 @@ interface JournalDao {
     suspend fun updateEntries(entries: List<JournalEntry>)
 
     // --- Search Query Matching Title or Details (Strict Non-Null Tag Support) ---
-    @Query("""
+    @Query(
+        """
         SELECT * FROM journal_entries 
         WHERE (
             title LIKE '%' || :query || '%' 
@@ -44,7 +45,8 @@ interface JournalDao {
         AND (:colorTag IS NULL OR colorTag = :colorTag)
         AND (:mediaType IS NULL OR mediaType = :mediaType)
         ORDER BY timestamp DESC
-    """)
+    """
+    )
     fun searchEntries(
         query: String,
         trimmedQuery: String,
@@ -54,21 +56,25 @@ interface JournalDao {
 
     // --- Cross-Filtered Dynamic Counts ---
     // Color tag counts filtered by active media type (if selected)
-    @Query("""
+    @Query(
+        """
         SELECT colorTag, COUNT(*) as count 
         FROM journal_entries 
         WHERE (:mediaType IS NULL OR mediaType = :mediaType)
         GROUP BY colorTag
-    """)
+    """
+    )
     fun getColorTagCounts(mediaType: EntryMediaType? = null): Flow<List<ColorTagCount>>
 
     // Media type counts filtered by active color tag (if selected)
-    @Query("""
+    @Query(
+        """
         SELECT mediaType, COUNT(*) as count 
         FROM journal_entries 
         WHERE (:colorTag IS NULL OR colorTag = :colorTag)
         GROUP BY mediaType
-    """)
+    """
+    )
     fun getMediaTypeCounts(colorTag: EntryColorTag? = null): Flow<List<MediaTypeCount>>
 
     // --- Recent Searches ---

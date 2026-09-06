@@ -8,7 +8,7 @@ import ash.app.journal.ui.models.RecentSearchEntity
 
 @Database(
     entities = [JournalEntry::class, LinkMetadataEntity::class, RecentSearchEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class JournalDatabase : RoomDatabase() {

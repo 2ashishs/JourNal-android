@@ -7,7 +7,8 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
         // 1. Create a pristine temporary table matching your new non-nullable Kotlin schema exactly
         // Ensure you match your primary key setups (e.g., id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)
-        db.execSQL("""
+        db.execSQL(
+            """
             CREATE TABLE IF NOT EXISTS journal_entries_new (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 title TEXT NOT NULL,
@@ -18,10 +19,12 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
                 timestamp INTEGER NOT NULL,
                 colorTag TEXT NOT NULL DEFAULT 'DEFAULT'
             )
-        """.trimIndent())
+        """.trimIndent()
+        )
 
         // 2. Transfer all records across, dynamically transforming legacy values inline using SQLite CASE statements
-        db.execSQL("""
+        db.execSQL(
+            """
             INSERT INTO journal_entries_new (id, title, details, mediaPath, mediaType, orderIndex, timestamp, colorTag)
             SELECT 
                 id, 
@@ -40,7 +43,8 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
                     ELSE 'DEFAULT'
                 END
             FROM journal_entries
-        """.trimIndent())
+        """.trimIndent()
+        )
 
         // 3. Destructively clear out the old table layout structural constraints
         db.execSQL("DROP TABLE journal_entries")
@@ -103,32 +107,45 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
 
 val MIGRATION_4_5 = object : Migration(4, 5) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("""
+        db.execSQL(
+            """
             CREATE TABLE IF NOT EXISTS `recent_searches` (
                 `query` TEXT NOT NULL, 
                 `timestamp` INTEGER NOT NULL, 
                 PRIMARY KEY(`query`)
             )
-        """.trimIndent())
+        """.trimIndent()
+        )
     }
 }
 
 val MIGRATION_5_6 = object : Migration(5, 6) {
     override fun migrate(db: SupportSQLiteDatabase) {
         // 1. Promote entries containing [card](url=...) or http links to LINK type if they were TEXT
-        db.execSQL("""
+        db.execSQL(
+            """
             UPDATE journal_entries 
             SET mediaType = 'LINK' 
             WHERE mediaType = 'TEXT' 
             AND (details LIKE '%[card](url=%' OR details LIKE '%http%')
-        """.trimIndent())
+        """.trimIndent()
+        )
 
         // 2. Optional: If sqlite replace is available, sanitize the syntax in text
         // (SQLite's built-in REPLACE handles exact string replacements)
-        db.execSQL("""
+        db.execSQL(
+            """
             UPDATE journal_entries 
             SET details = REPLACE(REPLACE(details, '[card](url=', '<'), ')', '>')
             WHERE details LIKE '%[card](url=%'
-        """.trimIndent())
+        """.trimIndent()
+        )
+    }
+}
+
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE journal_entries ADD COLUMN reminderTimestamp INTEGER DEFAULT NULL")
+        db.execSQL("ALTER TABLE journal_entries ADD COLUMN isReminderCompleted INTEGER NOT NULL DEFAULT 0")
     }
 }

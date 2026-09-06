@@ -13,3 +13,17 @@
 - Icon enhancement in `MarkdownToolbar`
 - `CreateEntryBottomSheet` is now fully expanded (for clarity)
 - In `CreateEntryBottomSheet` now the "Details" section gets keyboard focus, if a `MarkdownToolbar` button is pressed
+- Added permissions for Reminder notifications in `AndroidManifest`
+- Added `ReminderBroadcastReceiver`, `ReminderDateTimePickerDialog` and `ReminderScheduler`
+- Added `ReminderBroadcastReceiver` receiver in `AndroidManifest`
+- Added `reminderTimestamp` and `isReminderCompleted` to `JournalEntry`
+- Added `reminderTimestamp` to `JournalDraftState`
+- Added columns `reminderTimestamp` and `isReminderCompleted` to `journal_entries`
+- `DbMigrations` for `journal_entries` in `JournalApplication`
+- Updated Db version to `7`
+- Refactored `DbMigrations`
+- Added reminder notification functionality to `CreateEntryBottomSheet`
+- Updated methods in `JournalViewModel` to save, delete and edit entries with reminder timestamp
+- Added reminder icon to `JournalRowItem` in `HomeScreen`
+- Added alarm icon for reminders
+- Refactored `JournalDao`

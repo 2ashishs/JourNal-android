@@ -12,4 +12,6 @@ data class JournalEntry(
     val mediaType: EntryMediaType = EntryMediaType.TEXT, // Single Source of Truth for type
     val mediaPath: String? = null,  // Nullable: path to internal app storage
     val timestamp: Long = System.currentTimeMillis(),
+    val reminderTimestamp: Long? = null,
+    val isReminderCompleted: Boolean = false,
 )

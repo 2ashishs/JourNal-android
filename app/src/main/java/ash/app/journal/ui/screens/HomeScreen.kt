@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -100,6 +101,9 @@ import ash.app.journal.ui.models.LinkMetadataEntity
 import ash.app.journal.ui.theme.JournalTheme
 import coil3.compose.rememberAsyncImagePainter
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -188,12 +192,13 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             onTitleChange = viewModel::onTitleChanged,
             onDetailsChange = viewModel::onDetailsChanged,
             onColorSelect = viewModel::onColorSelected,
+            onReminderSelect = viewModel::onReminderTimestampSelected,
             onMediaCapture = viewModel::onMediaCaptured,
             isRecordingAudio = viewModel.isRecordingAudio,
             startAudioRecording = viewModel::startAudioRecording,
             stopAudioRecording = viewModel::stopAudioRecording,
             onSave = {
-                viewModel.saveCurrentEntry()
+                viewModel.saveCurrentEntry(context)
                 viewModel.setCreateSheetVisibility(false)
             },
             onDismiss = {
@@ -218,7 +223,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                 viewModel.setCreateSheetVisibility(true)
             },
             onDeleteClick = {
-                viewModel.deleteEntry(entry)
+                viewModel.deleteEntry(context, entry)
                 selectedEntryId = null
             },
             onShareClick = {
@@ -354,6 +359,32 @@ fun JournalRowItem(
                     .padding(24.dp)
             )
 
+            entry.reminderTimestamp?.takeIf { it > System.currentTimeMillis() }?.let { reminderTime ->
+                val formattedDate = remember(reminderTime) {
+                    SimpleDateFormat(
+                        "MMM d, h:mm a",
+                        Locale.getDefault()
+                    ).format(Date(reminderTime))
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_alarm),
+                        contentDescription = "Reminder",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = formattedDate,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .width(20.dp)
@@ -381,6 +412,7 @@ fun CreateEntryBottomSheet(
     onTitleChange: (String) -> Unit,
     onDetailsChange: (String) -> Unit,
     onColorSelect: (EntryColorTag) -> Unit,
+    onReminderSelect: (Long?) -> Unit,
     onMediaCapture: (String?, EntryMediaType) -> Unit,
     isRecordingAudio: Boolean,
     startAudioRecording: (Context) -> Unit,
@@ -432,6 +464,16 @@ fun CreateEntryBottomSheet(
                 selection = TextRange(draftState.details.length)
             )
         )
+    }
+
+    var showDateTimePicker by remember { mutableStateOf(false) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            showDateTimePicker = true
+        }
     }
 
     val sheetState = rememberModalBottomSheetState(
@@ -553,6 +595,53 @@ fun CreateEntryBottomSheet(
                                 color = MaterialTheme.colorScheme.primary,
                                 shape = CircleShape
                             )
+                    )
+                }
+            }
+
+            if (showDateTimePicker) {
+                ReminderDateTimePickerDialog(
+                    initialTimestamp = draftState.reminderTimestamp,
+                    onDismiss = { showDateTimePicker = false },
+                    onDateTimeSelected = { timestamp ->
+                        onReminderSelect(timestamp)
+                        showDateTimePicker = false
+                    }
+                )
+            }
+
+            draftState.reminderTimestamp?.let { reminderTime ->
+                val formattedDate = remember(reminderTime) {
+                    val sdf = SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault())
+                    sdf.format(Date(reminderTime))
+                }
+
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_alarm),
+                        contentDescription = "Reminder",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = formattedDate,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Icon(
+                        painter = painterResource(R.drawable.ic_close),
+                        contentDescription = "Remove Reminder",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable { onReminderSelect(null) }
                     )
                 }
             }
@@ -748,6 +837,38 @@ fun CreateEntryBottomSheet(
                                 )
                             }
                         }
+                    }
+                    // Reminder chip
+                    IconButton(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .border(
+                                1.dp,
+                                if (draftState.reminderTimestamp != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                                RoundedCornerShape(8.dp)
+                            ),
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                val hasPermission = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) == PackageManager.PERMISSION_GRANTED
+
+                                if (hasPermission) {
+                                    showDateTimePicker = true
+                                } else {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            } else {
+                                showDateTimePicker = true
+                            }
+                        }
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_alarm),
+                            contentDescription = "Set Reminder",
+                            tint = if (draftState.reminderTimestamp != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
+                        )
                     }
                 }
 
