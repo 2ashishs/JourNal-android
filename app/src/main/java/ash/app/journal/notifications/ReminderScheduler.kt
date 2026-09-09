@@ -65,9 +65,9 @@ object ReminderScheduler {
         details: String
     ): PendingIntent {
         val intent = Intent(context, ReminderBroadcastReceiver::class.java).apply {
-            putExtra(ReminderBroadcastReceiver.EXTRA_ENTRY_ID, entryId)
-            putExtra(ReminderBroadcastReceiver.EXTRA_ENTRY_TITLE, title)
-            putExtra(ReminderBroadcastReceiver.EXTRA_ENTRY_DETAILS, details)
+            putExtra(ReminderBroadcastReceiver.EXTRA_REMINDER_ENTRY_ID, entryId)
+            putExtra(ReminderBroadcastReceiver.EXTRA_REMINDER_ENTRY_TITLE, title)
+            putExtra(ReminderBroadcastReceiver.EXTRA_REMINDER_ENTRY_DETAILS, details)
         }
         return PendingIntent.getBroadcast(
             context,

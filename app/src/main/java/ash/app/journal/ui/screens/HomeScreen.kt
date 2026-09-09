@@ -111,7 +111,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
     val entries by viewModel.journalEntries.collectAsState()
     val draftState by viewModel.draftState.collectAsState()
 
-    var selectedEntryId by remember { mutableStateOf<Long?>(null) }
+    val selectedEntryId by viewModel.selectedEntryIdForDetail.collectAsState()
     val selectedEntryForDetail = entries.find { it.id == selectedEntryId }
 
     val lazyListState = rememberLazyListState()
@@ -163,7 +163,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                 ) { entry ->
                     JournalRowItem(
                         entry = entry,
-                        onClick = { selectedEntryId = entry.id }
+                        onClick = { viewModel.selectEntryForDetail(entry.id) }
                     )
                 }
             }
@@ -216,15 +216,15 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             isMediaFileAvailable = viewModel.isMediaFileAvailable(entry),
             onFetchMetadata = { url -> viewModel.fetchAndCacheMetadataForUrl(url) },
             onClearMissingMedia = { viewModel.removeMissingMediaFromEntry(entry) },
-            onDismiss = { selectedEntryId = null },
+            onDismiss = { viewModel.selectEntryForDetail(null) },
             onEditClick = {
                 viewModel.startEditing(entry)
-                selectedEntryId = null
+                viewModel.selectEntryForDetail(null)
                 viewModel.setCreateSheetVisibility(true)
             },
             onDeleteClick = {
                 viewModel.deleteEntry(context, entry)
-                selectedEntryId = null
+                viewModel.selectEntryForDetail(null)
             },
             onShareClick = {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -283,7 +283,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             onDeleteRecentSearch = viewModel::deleteRecentSearch,
             onClearAllRecentSearches = viewModel::clearAllRecentSearches,
             onEntryClick = { entry ->
-                selectedEntryId = entry.id // Opens your DetailEntryBottomSheet
+                viewModel.selectEntryForDetail(entry.id) // Opens your DetailEntryBottomSheet
             },
             onBackClick = {
                 viewModel.clearFilters()
@@ -359,31 +359,32 @@ fun JournalRowItem(
                     .padding(24.dp)
             )
 
-            entry.reminderTimestamp?.takeIf { it > System.currentTimeMillis() }?.let { reminderTime ->
-                val formattedDate = remember(reminderTime) {
-                    SimpleDateFormat(
-                        "MMM d, h:mm a",
-                        Locale.getDefault()
-                    ).format(Date(reminderTime))
-                }
+            entry.reminderTimestamp?.takeIf { it > System.currentTimeMillis() }
+                ?.let { reminderTime ->
+                    val formattedDate = remember(reminderTime) {
+                        SimpleDateFormat(
+                            "MMM d, h:mm a",
+                            Locale.getDefault()
+                        ).format(Date(reminderTime))
+                    }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_alarm),
-                        contentDescription = "Reminder",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Text(
-                        text = formattedDate,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_alarm),
+                            contentDescription = "Reminder",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = formattedDate,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
-            }
 
             Box(
                 modifier = Modifier

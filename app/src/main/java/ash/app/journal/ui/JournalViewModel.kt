@@ -53,6 +53,13 @@ class JournalViewModel(
     private val _draftState = MutableStateFlow(JournalDraftState())
     val draftState: StateFlow<JournalDraftState> = _draftState.asStateFlow()
 
+    private val _selectedEntryIdForDetail = MutableStateFlow<Long?>(null)
+    val selectedEntryIdForDetail: StateFlow<Long?> = _selectedEntryIdForDetail.asStateFlow()
+
+    fun selectEntryForDetail(entryId: Long?) {
+        _selectedEntryIdForDetail.value = entryId
+    }
+
     // --- Draft State Mutations (Called by UI as user types/interacts) ---
 
     fun onTitleChanged(newTitle: String) {

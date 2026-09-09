@@ -14,9 +14,10 @@ import androidx.activity.compose.setContent
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import ash.app.journal.notifications.ReminderBroadcastReceiver
 import ash.app.journal.ui.JournalViewModel
-import ash.app.journal.ui.screens.MainJournalScreen
 import ash.app.journal.ui.models.EntryMediaType
+import ash.app.journal.ui.screens.MainJournalScreen
 import ash.app.journal.ui.theme.JourNaLTheme
 import java.io.File
 import java.io.FileOutputStream
@@ -71,8 +72,8 @@ class MainActivity : ComponentActivity() {
 
         viewModel = ViewModelProvider(this, viewModelFactory)[JournalViewModel::class.java]
 
-        // Handle incoming intent data stream if launched via systemic share actions
-        handleSharedIntent(intent)
+        // Handle incoming intent data stream
+        handleIncomingIntent(intent)
 
         setContent {
             JourNaLTheme {
@@ -84,6 +85,22 @@ class MainActivity : ComponentActivity() {
     // Capture case patterns where the app instance is already open in the background memory register
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+
+        // 1. Check for Reminder Notification tap
+        val reminderEntryId =
+            intent.getLongExtra(ReminderBroadcastReceiver.EXTRA_REMINDER_ENTRY_ID, -1L)
+        if (reminderEntryId != -1L) {
+            viewModel.selectEntryForDetail(reminderEntryId)
+            intent.removeExtra(ReminderBroadcastReceiver.EXTRA_REMINDER_ENTRY_ID)
+            return
+        }
+
+        // 2. Fallback to System Share Intent
         handleSharedIntent(intent)
     }
 

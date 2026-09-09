@@ -27,3 +27,8 @@
 - Added reminder icon to `JournalRowItem` in `HomeScreen`
 - Added alarm icon for reminders
 - Refactored `JournalDao`
+- Tapping on reminder notification, opens the corresponding entry in app
+- `ReminderBroadcastReceiver` updated EXTRA names
+- In `ReminderBroadcastReceiver` for `PendingIntent` changed `entryId.toInt()` to `(entryId % Int.MAX_VALUE).toInt()`
+- Updated handling of incoming intent in `MainActivity`
+- Selected `entryId` is now updated in viewModel instead of `HomeScreen`

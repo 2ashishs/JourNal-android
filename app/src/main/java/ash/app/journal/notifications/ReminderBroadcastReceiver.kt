@@ -13,27 +13,27 @@ import ash.app.journal.R
 class ReminderBroadcastReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        val entryId = intent.getLongExtra(EXTRA_ENTRY_ID, -1L)
-        val title = intent.getStringExtra(EXTRA_ENTRY_TITLE) ?: "Reminder"
-        val details = intent.getStringExtra(EXTRA_ENTRY_DETAILS) ?: ""
+        val entryId = intent.getLongExtra(EXTRA_REMINDER_ENTRY_ID, -1L)
+        val title = intent.getStringExtra(EXTRA_REMINDER_ENTRY_TITLE) ?: "Reminder"
+        val details = intent.getStringExtra(EXTRA_REMINDER_ENTRY_DETAILS) ?: ""
 
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel(context, notificationManager)
 
         val tapIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            putExtra(EXTRA_ENTRY_ID, entryId)
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_REMINDER_ENTRY_ID, entryId)
         }
 
         val pendingIntent = PendingIntent.getActivity(
             context,
-            entryId.toInt(),
+            (entryId % Int.MAX_VALUE).toInt(), // for the edge case that number of entries exceed 2 billion
             tapIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_REMINDERS)
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle(title)
             .setContentText(details.ifBlank { "You have a scheduled journal reminder" })
@@ -48,7 +48,7 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
 
     private fun createNotificationChannel(context: Context, manager: NotificationManager) {
         val channel = NotificationChannel(
-            CHANNEL_ID,
+            CHANNEL_ID_REMINDERS,
             "Journal Reminders",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
@@ -59,9 +59,9 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        const val CHANNEL_ID = "journal_reminders_channel"
-        const val EXTRA_ENTRY_ID = "extra_entry_id"
-        const val EXTRA_ENTRY_TITLE = "extra_entry_title"
-        const val EXTRA_ENTRY_DETAILS = "extra_entry_details"
+        const val CHANNEL_ID_REMINDERS = "journal_reminders_channel"
+        const val EXTRA_REMINDER_ENTRY_ID = "extra_reminder_entry_id"
+        const val EXTRA_REMINDER_ENTRY_TITLE = "extra_reminder_entry_title"
+        const val EXTRA_REMINDER_ENTRY_DETAILS = "extra_reminder_entry_details"
     }
 }
