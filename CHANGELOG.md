@@ -32,3 +32,4 @@
 - In `ReminderBroadcastReceiver` for `PendingIntent` changed `entryId.toInt()` to `(entryId % Int.MAX_VALUE).toInt()`
 - Updated handling of incoming intent in `MainActivity`
 - Selected `entryId` is now updated in viewModel instead of `HomeScreen`
+- Removed redundant parameter `context` from `createNotificationChannel` in `ReminderBroadcastReceiver`

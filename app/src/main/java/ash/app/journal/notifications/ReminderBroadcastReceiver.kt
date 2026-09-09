@@ -19,7 +19,7 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
 
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        createNotificationChannel(context, notificationManager)
+        createNotificationChannel(notificationManager) // pass `context` to extract text from `strings.xml`
 
         val tapIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -46,7 +46,7 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
         notificationManager.notify(entryId.toInt(), notification)
     }
 
-    private fun createNotificationChannel(context: Context, manager: NotificationManager) {
+    private fun createNotificationChannel(manager: NotificationManager) {
         val channel = NotificationChannel(
             CHANNEL_ID_REMINDERS,
             "Journal Reminders",
