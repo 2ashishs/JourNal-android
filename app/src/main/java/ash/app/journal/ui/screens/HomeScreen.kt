@@ -851,36 +851,38 @@ fun CreateEntryBottomSheet(
                         }
                     }
                     // Reminder chip
-                    IconButton(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .border(
-                                1.dp,
-                                if (draftState.reminderTimestamp != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-                                RoundedCornerShape(8.dp)
-                            ),
-                        onClick = {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                val hasPermission = ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.POST_NOTIFICATIONS
-                                ) == PackageManager.PERMISSION_GRANTED
+                    if (draftState.reminderTimestamp == null) {
+                        IconButton(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.onBackground,
+                                    RoundedCornerShape(8.dp)
+                                ),
+                            onClick = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    val hasPermission = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.POST_NOTIFICATIONS
+                                    ) == PackageManager.PERMISSION_GRANTED
 
-                                if (hasPermission) {
-                                    showDateTimePicker = true
+                                    if (hasPermission) {
+                                        showDateTimePicker = true
+                                    } else {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
                                 } else {
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    showDateTimePicker = true
                                 }
-                            } else {
-                                showDateTimePicker = true
                             }
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_alarm),
+                                contentDescription = "Set Reminder",
+                                tint = MaterialTheme.colorScheme.onBackground
+                            )
                         }
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_alarm),
-                            contentDescription = "Set Reminder",
-                            tint = if (draftState.reminderTimestamp != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
-                        )
                     }
                 }
 

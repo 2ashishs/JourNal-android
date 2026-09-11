@@ -337,6 +337,7 @@ class JournalViewModel(
 
     // Triggered when the user clicks "Edit" from either the Home menu or Detail Sheet
     fun startEditing(entry: JournalEntry) {
+        val activeReminder = entry.reminderTimestamp?.takeIf { it > System.currentTimeMillis() }
         _draftState.update {
             JournalDraftState(
                 editingEntryId = entry.id,
@@ -345,7 +346,7 @@ class JournalViewModel(
                 selectedColorTag = entry.colorTag,
                 capturedMediaPath = if (isMediaFileAvailable(entry)) entry.mediaPath else null,
                 capturedMediaType = if (isMediaFileAvailable(entry)) entry.mediaType else EntryMediaType.TEXT,
-                reminderTimestamp = entry.reminderTimestamp,
+                reminderTimestamp = activeReminder,
             )
         }
     }
