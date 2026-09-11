@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -331,64 +332,74 @@ fun JournalRowItem(
         elevation = CardDefaults.cardElevation(
             defaultElevation = 4.dp,
             pressedElevation = 2.dp,
-            draggedElevation = 8.dp
         )
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 84.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Prefix Media Icon
             Icon(
                 painter = painterResource(prefixIconRes),
                 contentDescription = stringResource(R.string.content_type_indicator),
                 tint = tagColor,
                 modifier = Modifier
-                    .padding(start = 16.dp)
+                    .padding(start = 16.dp, end = 12.dp)
                     .size(24.dp)
             )
 
-            Text(
-                text = entry.title.ifBlank { stringResource(R.string.untitled_entry) },
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+            // Column: Title & Reminder pill
+            Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(24.dp)
-            )
+                    .padding(top = 14.dp, bottom = 12.dp),
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = entry.title.ifBlank { stringResource(R.string.untitled_entry) },
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
 
-            entry.reminderTimestamp?.takeIf { it > System.currentTimeMillis() }
-                ?.let { reminderTime ->
-                    val formattedDate = remember(reminderTime) {
-                        SimpleDateFormat(
-                            "MMM d, h:mm a",
-                            Locale.getDefault()
-                        ).format(Date(reminderTime))
-                    }
+                entry.reminderTimestamp?.takeIf { it > System.currentTimeMillis() }
+                    ?.let { reminderTime ->
+                        val formattedDate = remember(reminderTime) {
+                            SimpleDateFormat(
+                                "MMM d, h:mm a",
+                                Locale.getDefault()
+                            ).format(Date(reminderTime))
+                        }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_alarm),
-                            contentDescription = "Reminder",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Text(
-                            text = formattedDate,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_alarm),
+                                contentDescription = "Reminder",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(12.dp),
+                            )
+                            Text(
+                                text = formattedDate,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
                     }
-                }
+            }
 
             Box(
                 modifier = Modifier
-                    .width(20.dp)
+                    .width(18.dp)
                     .fillMaxHeight()
                     .background(tagColor)
             )
