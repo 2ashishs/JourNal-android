@@ -1012,6 +1012,37 @@ fun DetailEntryBottomSheet(
                     thickness = DividerDefaults.Thickness,
                     color = MaterialTheme.colorScheme.surfaceVariant
                 )
+
+                // Active Reminder Pill (only rendered if scheduled in the future)
+                entry.reminderTimestamp?.takeIf { it > System.currentTimeMillis() }?.let { reminderTime ->
+                    val formattedDate = remember(reminderTime) {
+                        val sdf = SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault())
+                        sdf.format(Date(reminderTime))
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_alarm),
+                            contentDescription = "Active Reminder",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = formattedDate,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
             }
 
             // SCROLLABLE ZONE (Details & Photo)

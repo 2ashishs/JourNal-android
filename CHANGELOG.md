@@ -40,3 +40,4 @@
 - Reminder notification custom sound using a new notification channel
 - Delete old notification channel
 - Reminder Pill enhancements in `CreateEntryBottomSheet`
+- Active Reminder Pill in `DetailEntryBottomSheet`
