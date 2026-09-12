@@ -2,6 +2,9 @@ package ash.app.journal.ui.models
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Entity(tableName = "journal_entries")
 data class JournalEntry(
@@ -15,3 +18,13 @@ data class JournalEntry(
     val reminderTimestamp: Long? = null,
     val isReminderCompleted: Boolean = false,
 )
+
+val JournalEntry.hasActiveReminder: Boolean
+    get() = !isReminderCompleted &&
+            reminderTimestamp != null &&
+            reminderTimestamp > System.currentTimeMillis()
+
+fun JournalEntry.formattedReminderText(pattern: String = "MMM d, h:mm a"): String? {
+    val timestamp = reminderTimestamp ?: return null
+    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestamp))
+}

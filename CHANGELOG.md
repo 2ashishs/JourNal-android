@@ -43,3 +43,6 @@
 - Active Reminder Pill in `DetailEntryBottomSheet`
 - Reactive reminder pill updates in `JournalRowItem` and `DetailEntryBottomSheet`
 - Reactive reminder pill updates on "Snooze"
+- Added extension functions in `JournalEntry` to check if a reminder is active and display date-time text in reminder pill
+- In `ReminderBroadcastReceiver` code clean up and handling of phone during notification time scenario
+- Refactored code in `HomeScreen` to use `JournalEntry` extension functions for reminder pill

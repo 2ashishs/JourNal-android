@@ -26,16 +26,18 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
         val details = intent.getStringExtra(EXTRA_REMINDER_ENTRY_DETAILS) ?: ""
         val action = intent.action
 
+        if (entryId == -1L) return
+
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationId = (entryId % Int.MAX_VALUE).toInt()
 
         // Custom Sound Uri
         val soundUri =
             "${ContentResolver.SCHEME_ANDROID_RESOURCE}://${context.packageName}/${R.raw.reminder_tone}".toUri()
 
         // --- BRANCH 1: SNOOZE ACTION CLICKED ---
-        if (action == ACTION_SNOOZE && entryId != -1L) {
-            val notificationId = (entryId % Int.MAX_VALUE).toInt()
+        if (action == ACTION_SNOOZE) {
             notificationManager.cancel(notificationId)
 
             val snoozeDuration = 60 * 60 * 1000L
@@ -91,9 +93,6 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
             putExtra(EXTRA_REMINDER_ENTRY_ID, entryId)
         }
 
-        val notificationId =
-            (entryId % Int.MAX_VALUE).toInt() // for the edge case that number of entries exceed 2 billion
-
         val pendingTapIntent = PendingIntent.getActivity(
             context,
             notificationId,
@@ -121,6 +120,7 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
             .setContentTitle(title)
             .setContentText(details.ifBlank { "Journal Reminder" })
             .setStyle(NotificationCompat.BigTextStyle().bigText(details.ifBlank { title }))
+            .setCategory(NotificationCompat.CATEGORY_REMINDER) // Survives phone call interruptions
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setSound(soundUri) // Legacy fallback for API < 26
             .setAutoCancel(true)
@@ -128,7 +128,7 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
             .addAction(R.drawable.ic_alarm, "Snooze (1h)", pendingSnoozeIntent) // Snooze button
             .build()
 
-        notificationManager.notify(entryId.toInt(), notification)
+        notificationManager.notify(notificationId, notification)
     }
 
     private fun createNotificationChannel(manager: NotificationManager, soundUri: Uri) {
@@ -145,7 +145,7 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
             "Journal Reminders",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Notifications for scheduled journal entry reminders"
+            description = "Notifications for scheduled journal reminders"
             enableVibration(true)
             setSound(soundUri, audioAttributes)
         }
@@ -153,8 +153,8 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        const val OLD_CHANNEL_ID_REMINDERS = "journal_reminders_channel"
-        const val CHANNEL_ID_REMINDER = "journal_reminder_channel"
+        const val OLD_CHANNEL_ID_REMINDERS = "journal_reminder_channel"
+        const val CHANNEL_ID_REMINDER = "journal_reminders_channel"
         const val EXTRA_REMINDER_ENTRY_ID = "extra_reminder_entry_id"
         const val EXTRA_REMINDER_ENTRY_TITLE = "extra_reminder_entry_title"
         const val EXTRA_REMINDER_ENTRY_DETAILS = "extra_reminder_entry_details"

@@ -99,6 +99,8 @@ import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.models.LinkMetadataEntity
+import ash.app.journal.ui.models.formattedReminderText
+import ash.app.journal.ui.models.hasActiveReminder
 import ash.app.journal.ui.theme.JournalTheme
 import coil3.compose.rememberAsyncImagePainter
 import java.io.File
@@ -367,34 +369,30 @@ fun JournalRowItem(
                     overflow = TextOverflow.Ellipsis,
                 )
 
-                entry.reminderTimestamp?.takeIf { !entry.isReminderCompleted && it > System.currentTimeMillis() }
-                    ?.let { reminderTime ->
-                        val formattedDate = remember(reminderTime) {
-                            SimpleDateFormat(
-                                "MMM d, h:mm a",
-                                Locale.getDefault()
-                            ).format(Date(reminderTime))
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_alarm),
-                                contentDescription = "Reminder",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(12.dp),
-                            )
-                            Text(
-                                text = formattedDate,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium,
-                            )
-                        }
+                if (entry.hasActiveReminder) {
+                    val formattedDate = remember(entry.reminderTimestamp) {
+                        entry.formattedReminderText() ?: ""
                     }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_alarm),
+                            contentDescription = "Reminder",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            text = formattedDate,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
             }
 
             Box(
@@ -1014,36 +1012,33 @@ fun DetailEntryBottomSheet(
                 )
 
                 // Active Reminder Pill (only rendered if scheduled in the future)
-                entry.reminderTimestamp?.takeIf { !entry.isReminderCompleted && it > System.currentTimeMillis() }
-                    ?.let { reminderTime ->
-                        val formattedDate = remember(reminderTime) {
-                            val sdf =
-                                SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault())
-                            sdf.format(Date(reminderTime))
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_alarm),
-                                contentDescription = "Active Reminder",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = formattedDate,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                if (entry.hasActiveReminder) {
+                    val formattedDate = remember(entry.reminderTimestamp) {
+                        entry.formattedReminderText("MMM dd, yyyy • hh:mm a") ?: ""
                     }
+
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_alarm),
+                            contentDescription = "Active Reminder",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = formattedDate,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
 
             }
 
