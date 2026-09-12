@@ -14,6 +14,7 @@ interface JournalRepository {
     suspend fun deleteEntry(entry: JournalEntry)
     suspend fun updateEntry(entry: JournalEntry)
     suspend fun updateEntries(entries: List<JournalEntry>)
+    suspend fun getEntryById(id: Long): JournalEntry?
 
     // Search Query Matching Title or Details
     fun searchEntries(

@@ -32,6 +32,9 @@ interface JournalDao {
     @Update
     suspend fun updateEntries(entries: List<JournalEntry>)
 
+    @Query("SELECT * FROM journal_entries WHERE id = :id LIMIT 1")
+    suspend fun getEntryById(id: Long): JournalEntry?
+
     // --- Search Query Matching Title or Details (Strict Non-Null Tag Support) ---
     @Query(
         """

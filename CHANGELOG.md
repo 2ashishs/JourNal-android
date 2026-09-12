@@ -36,3 +36,4 @@
 - Title and Reminder pill UI fixes in `JournalRowItem` composable in `HomeScreen`
 - Hide create reminder button in create/edit entry bottom sheet, if a reminder is active
 - Handle expired reminders in `startEditing` method in `ViewModel`
+- Snooze action for reminder notifications; delays notification by one hour

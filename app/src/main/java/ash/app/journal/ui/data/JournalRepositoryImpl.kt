@@ -32,6 +32,10 @@ class JournalRepositoryImpl(
         journalDao.updateEntries(entries)
     }
 
+    override suspend fun getEntryById(id: Long): JournalEntry? {
+        return journalDao.getEntryById(id)
+    }
+
     //SEARCH
 
     override fun searchEntries(
