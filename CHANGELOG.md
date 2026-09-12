@@ -41,3 +41,4 @@
 - Delete old notification channel
 - Reminder Pill enhancements in `CreateEntryBottomSheet`
 - Active Reminder Pill in `DetailEntryBottomSheet`
+- Reactive reminder pill updates in `JournalRowItem` and `DetailEntryBottomSheet`

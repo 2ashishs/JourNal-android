@@ -35,6 +35,9 @@ interface JournalDao {
     @Query("SELECT * FROM journal_entries WHERE id = :id LIMIT 1")
     suspend fun getEntryById(id: Long): JournalEntry?
 
+    @Query("UPDATE journal_entries SET isReminderCompleted = 1 WHERE id = :entryId")
+    suspend fun markReminderCompleted(entryId: Long)
+
     // --- Search Query Matching Title or Details (Strict Non-Null Tag Support) ---
     @Query(
         """

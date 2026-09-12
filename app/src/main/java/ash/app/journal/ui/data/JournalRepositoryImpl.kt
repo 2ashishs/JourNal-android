@@ -36,6 +36,10 @@ class JournalRepositoryImpl(
         return journalDao.getEntryById(id)
     }
 
+    override suspend fun markReminderCompleted(entryId: Long) {
+        journalDao.markReminderCompleted(entryId)
+    }
+
     //SEARCH
 
     override fun searchEntries(

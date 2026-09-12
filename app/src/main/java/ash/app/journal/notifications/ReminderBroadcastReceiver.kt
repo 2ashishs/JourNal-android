@@ -70,6 +70,17 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
             soundUri
         ) // pass `context` to extract text from `strings.xml`
 
+        // Update Room so the UI elements instantly drop the reminder pill when reminder completed
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val app = context.applicationContext as JournalApplication
+                app.repository.markReminderCompleted(entryId)
+            } finally {
+                pendingResult.finish()
+            }
+        }
+
         val tapIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_REMINDER_ENTRY_ID, entryId)
