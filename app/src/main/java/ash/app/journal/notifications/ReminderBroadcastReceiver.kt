@@ -47,7 +47,12 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
                     val app = context.applicationContext as JournalApplication
                     val entry = app.repository.getEntryById(entryId)
                     if (entry != null) {
-                        app.repository.updateEntry(entry.copy(reminderTimestamp = newReminderTime))
+                        app.repository.updateEntry(
+                            entry.copy(
+                                reminderTimestamp = newReminderTime,
+                                isReminderCompleted = false,
+                            )
+                        )
                     }
                     // Schedule the snoozed alarm
                     ReminderScheduler.scheduleReminder(

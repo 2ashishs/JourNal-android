@@ -2,7 +2,6 @@
 
 ## 🛠️ Features
 
-- Reminder entry type with notifications
 - Expense tracker entry type
 - Alternate carousel view for entries
 - Settings screen, which enables the user,
