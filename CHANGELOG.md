@@ -37,3 +37,5 @@
 - Hide create reminder button in create/edit entry bottom sheet, if a reminder is active
 - Handle expired reminders in `startEditing` method in `ViewModel`
 - Snooze action for reminder notifications; delays notification by one hour
+- Reminder notification custom sound using a new notification channel
+- Delete old notification channel
