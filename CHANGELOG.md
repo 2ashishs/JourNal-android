@@ -39,3 +39,4 @@
 - Snooze action for reminder notifications; delays notification by one hour
 - Reminder notification custom sound using a new notification channel
 - Delete old notification channel
+- Reminder Pill enhancements in `CreateEntryBottomSheet`

@@ -628,29 +628,43 @@ fun CreateEntryBottomSheet(
                     sdf.format(Date(reminderTime))
                 }
 
+                //Reminder Pill
                 Row(
                     modifier = Modifier
+                        .clickable { showDateTimePicker = true }
                         .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_alarm),
-                        contentDescription = "Reminder",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = formattedDate,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    // Tapping the alarm icon or the date string triggers edit/reschedule
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { showDateTimePicker = true },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // Leading Alarm Icon
+                        Icon(
+                            painter = painterResource(R.drawable.ic_alarm),
+                            contentDescription = "Reminder",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        // Reminder Date-Time Text
+                        Text(
+                            text = formattedDate,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    // Action: Cancel Reminder (✘)
                     Icon(
                         painter = painterResource(R.drawable.ic_close),
                         contentDescription = "Remove Reminder",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier
                             .size(16.dp)
                             .clickable { onReminderSelect(null) }
