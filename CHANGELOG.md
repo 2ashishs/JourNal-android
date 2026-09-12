@@ -46,3 +46,6 @@
 - Added extension functions in `JournalEntry` to check if a reminder is active and display date-time text in reminder pill
 - In `ReminderBroadcastReceiver` code clean up and handling of phone during notification time scenario
 - Refactored code in `HomeScreen` to use `JournalEntry` extension functions for reminder pill
+- Added a `BootReceiver` in `Manifest` file
+- `JournalDao` query to retrieve all pending reminder entries from db; used by `JournalRepository`
+- `BootReceiver` schedules all pending reminders after reboot or package replaced

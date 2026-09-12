@@ -38,6 +38,16 @@ interface JournalDao {
     @Query("UPDATE journal_entries SET isReminderCompleted = 1 WHERE id = :entryId")
     suspend fun markReminderCompleted(entryId: Long)
 
+    @Query(
+        """
+    SELECT * FROM journal_entries 
+    WHERE isReminderCompleted = 0 
+      AND reminderTimestamp IS NOT NULL 
+      AND reminderTimestamp > :currentTime
+    """
+    )
+    suspend fun getPendingReminders(currentTime: Long = System.currentTimeMillis()): List<JournalEntry>
+
     // --- Search Query Matching Title or Details (Strict Non-Null Tag Support) ---
     @Query(
         """

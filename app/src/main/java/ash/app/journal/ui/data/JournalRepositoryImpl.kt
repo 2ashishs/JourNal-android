@@ -40,6 +40,10 @@ class JournalRepositoryImpl(
         journalDao.markReminderCompleted(entryId)
     }
 
+    override suspend fun getPendingReminders(): List<JournalEntry> {
+        return journalDao.getPendingReminders(System.currentTimeMillis())
+    }
+
     //SEARCH
 
     override fun searchEntries(
