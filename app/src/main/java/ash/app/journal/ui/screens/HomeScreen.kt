@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -99,6 +100,8 @@ import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.models.LinkMetadataEntity
+import ash.app.journal.ui.models.RemindAgainCadence
+import ash.app.journal.ui.models.canRemindAgain
 import ash.app.journal.ui.models.formattedReminderText
 import ash.app.journal.ui.models.hasActiveReminder
 import ash.app.journal.ui.theme.JournalTheme
@@ -258,7 +261,13 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                     shareViaTitle
                 )
                 context.startActivity(chooserIntent)
-            }
+            },
+            onRemindAgainSuggestionClick = { cadence ->
+                viewModel.repeatReminder(context, entry, cadence)
+            },
+            onRemindAgainDismissClick = {
+                viewModel.dismissRemindAgain(entry)
+            },
         )
     }
 
@@ -924,7 +933,9 @@ fun DetailEntryBottomSheet(
     onDismiss: () -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    onShareClick: () -> Unit
+    onShareClick: () -> Unit,
+    onRemindAgainSuggestionClick: (RemindAgainCadence) -> Unit,
+    onRemindAgainDismissClick: () -> Unit,
 ) {
     // Get the device screen height dynamically
     val windowInfo = LocalWindowInfo.current
@@ -1037,6 +1048,72 @@ fun DetailEntryBottomSheet(
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             fontWeight = FontWeight.Medium
                         )
+                    }
+                } else if (entry.canRemindAgain) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // Left section: icon + text + chips (scrolls smoothly if width is tight)
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .horizontalScroll(rememberScrollState()),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_alarm),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp),
+                            )
+
+                            Text(
+                                text = "Remind again in:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            RemindAgainCadence.entries.forEach { cadence ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(MaterialTheme.colorScheme.surface)
+                                        .border(
+                                            width = 1.dp,
+                                            color = MaterialTheme.colorScheme.outlineVariant,
+                                            shape = RoundedCornerShape(6.dp)
+                                        )
+                                        .clickable { onRemindAgainSuggestionClick(cadence) }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = cadence.label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                            }
+                        }
+
+                        // Pinned Dismiss action (✘): Always visible regardless of screen width
+                        IconButton(
+                            onClick = onRemindAgainDismissClick,
+                            modifier = Modifier.size(24.dp),
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_close),
+                                contentDescription = "Dismiss reminder suggestions",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
                     }
                 }
 

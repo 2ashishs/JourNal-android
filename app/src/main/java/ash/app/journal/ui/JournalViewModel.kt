@@ -19,7 +19,9 @@ import ash.app.journal.ui.models.JournalDraftState
 import ash.app.journal.ui.models.JournalEntry
 import ash.app.journal.ui.models.LinkMetadataEntity
 import ash.app.journal.ui.models.RecentSearchEntity
+import ash.app.journal.ui.models.RemindAgainCadence
 import ash.app.journal.ui.models.SearchFilterCounts
+import ash.app.journal.ui.models.calculateNextReminder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -235,6 +237,35 @@ class JournalViewModel(
 
     fun onReminderTimestampSelected(timestamp: Long?) {
         _draftState.update { it.copy(reminderTimestamp = timestamp) }
+    }
+
+    fun repeatReminder(context: Context, entry: JournalEntry, cadence: RemindAgainCadence) {
+        viewModelScope.launch {
+            val nextTime = entry.calculateNextReminder(cadence)
+            val updatedEntry = entry.copy(
+                reminderTimestamp = nextTime,
+                isReminderCompleted = false
+            )
+            repository.updateEntry(updatedEntry)
+
+            ReminderScheduler.scheduleReminder(
+                context = context,
+                entryId = updatedEntry.id,
+                title = updatedEntry.title,
+                details = updatedEntry.details,
+                reminderTimeMillis = nextTime
+            )
+        }
+    }
+
+    fun dismissRemindAgain(entry: JournalEntry) {
+        viewModelScope.launch {
+            val updatedEntry = entry.copy(
+                reminderTimestamp = null,
+                isReminderCompleted = false
+            )
+            repository.updateEntry(updatedEntry)
+        }
     }
 
     // --- Database Actions ---

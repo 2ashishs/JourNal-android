@@ -49,3 +49,4 @@
 - Added a `BootReceiver` in `Manifest` file
 - `JournalDao` query to retrieve all pending reminder entries from db; used by `JournalRepository`
 - `BootReceiver` schedules all pending reminders after reboot or package replaced
+- "Remind Again" bar in entries whose reminder expired
