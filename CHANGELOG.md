@@ -50,3 +50,5 @@
 - `JournalDao` query to retrieve all pending reminder entries from db; used by `JournalRepository`
 - `BootReceiver` schedules all pending reminders after reboot or package replaced
 - "Remind Again" bar in entries whose reminder expired
+- Upgrade AGP plugin to 9.4.1
+- Upgrade other library versions
