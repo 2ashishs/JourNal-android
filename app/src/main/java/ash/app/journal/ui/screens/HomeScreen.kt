@@ -125,6 +125,8 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
     val shareViaTitle = stringResource(R.string.share_entry_via)
 
     var isSearchScreenOpen by remember { mutableStateOf(false) }
+    val onlyActiveRemindersFilter by viewModel.onlyActiveRemindersFilter.collectAsState()
+    val onlyPrivateFilter by viewModel.onlyPrivateFilter.collectAsState()
 
     Scaffold(
         topBar = {
@@ -199,6 +201,7 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             onDetailsChange = viewModel::onDetailsChanged,
             onColorSelect = viewModel::onColorSelected,
             onReminderSelect = viewModel::onReminderTimestampSelected,
+            onPrivacyToggled = viewModel::onPrivacyToggled,
             onMediaCapture = viewModel::onMediaCaptured,
             isRecordingAudio = viewModel.isRecordingAudio,
             startAudioRecording = viewModel::startAudioRecording,
@@ -285,11 +288,15 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
             onQueryChange = viewModel::onSearchQueryChanged,
             selectedColorFilter = selectedColorFilter,
             selectedMediaFilter = selectedMediaFilter,
+            onlyActiveRemindersFilter = onlyActiveRemindersFilter,
+            onlyPrivateFilter = onlyPrivateFilter,
             filterCounts = filterCounts,
             searchResults = searchResults,
             recentSearches = recentSearches,
             onColorFilterSelected = viewModel::onColorFilterSelected,
             onMediaFilterSelected = viewModel::onMediaFilterSelected,
+            onToggleActiveRemindersFilter = viewModel::toggleActiveRemindersFilter,
+            onTogglePrivateFilter = viewModel::togglePrivateFilter,
             onClearFilterChips = viewModel::clearFilterChips,
             onSearchExecuted = { term -> viewModel.saveRecentSearch(term) },
             onDeleteRecentSearch = viewModel::deleteRecentSearch,
@@ -432,6 +439,7 @@ fun CreateEntryBottomSheet(
     onDetailsChange: (String) -> Unit,
     onColorSelect: (EntryColorTag) -> Unit,
     onReminderSelect: (Long?) -> Unit,
+    onPrivacyToggled: () -> Unit,
     onMediaCapture: (String?, EntryMediaType) -> Unit,
     isRecordingAudio: Boolean,
     startAudioRecording: (Context) -> Unit,
@@ -565,56 +573,217 @@ fun CreateEntryBottomSheet(
             )
 
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. "Default Tag Color Selected" Option Button
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(
-                            width = if (draftState.selectedColorTag == EntryColorTag.DEFAULT) 2.dp else 1.dp,
-                            color = if (draftState.selectedColorTag == EntryColorTag.DEFAULT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                            shape = CircleShape
-                        )
-                        .clickable { onColorSelect(EntryColorTag.DEFAULT) },
-                    contentAlignment = Alignment.Center
+                // Left: Color Swatches
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Canvas(modifier = Modifier.size(24.dp)) {
-                        drawLine(
-                            color = Color.Red,
-                            start = Offset(0f, size.height),
-                            end = Offset(size.width, 0f),
-                            strokeWidth = 2.dp.toPx()
-                        )
-                    }
-                }
-
-                // 2. The Standard Primary Palette Colors List Loop
-                EntryColorTag.entries.filter { it != EntryColorTag.DEFAULT }.forEach { colorTag ->
-
-                    val tagDisplayColor = when (colorTag) {
-                        EntryColorTag.RED -> JournalTheme.tagColors.tagRed
-                        EntryColorTag.YELLOW -> JournalTheme.tagColors.tagYellow
-                        EntryColorTag.GREEN -> JournalTheme.tagColors.tagGreen
-                        EntryColorTag.BLUE -> JournalTheme.tagColors.tagBlue
-                        else -> Color.Gray
-                    }
-
+                    // "Default Tag Color" Selected
                     Box(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(tagDisplayColor)
-                            .clickable { onColorSelect(colorTag) }
+                            .background(MaterialTheme.colorScheme.surface)
                             .border(
-                                width = if (draftState.selectedColorTag == colorTag) 2.dp else 0.dp,
-                                color = MaterialTheme.colorScheme.primary,
+                                width = if (draftState.selectedColorTag == EntryColorTag.DEFAULT) 2.dp else 1.dp,
+                                color = if (draftState.selectedColorTag == EntryColorTag.DEFAULT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                 shape = CircleShape
                             )
-                    )
+                            .clickable { onColorSelect(EntryColorTag.DEFAULT) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(modifier = Modifier.size(24.dp)) {
+                            drawLine(
+                                color = Color.Red,
+                                start = Offset(0f, size.height),
+                                end = Offset(size.width, 0f),
+                                strokeWidth = 2.dp.toPx()
+                            )
+                        }
+                    }
+
+                    // Color Palette List
+                    EntryColorTag.entries.filter { it != EntryColorTag.DEFAULT }
+                        .forEach { colorTag ->
+                            val tagDisplayColor = when (colorTag) {
+                                EntryColorTag.RED -> JournalTheme.tagColors.tagRed
+                                EntryColorTag.YELLOW -> JournalTheme.tagColors.tagYellow
+                                EntryColorTag.GREEN -> JournalTheme.tagColors.tagGreen
+                                EntryColorTag.BLUE -> JournalTheme.tagColors.tagBlue
+                                else -> Color.Gray
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(tagDisplayColor)
+                                    .clickable { onColorSelect(colorTag) }
+                                    .border(
+                                        width = if (draftState.selectedColorTag == colorTag) 2.dp else 0.dp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shape = CircleShape
+                                    )
+                            )
+                        }
+                }
+
+                // Right: Action Icons (Reminder & Privacy)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val hasReminderSet = draftState.reminderTimestamp != null
+                    // Reminder Icon
+                    IconButton(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .border(
+                                1.dp,
+                                if (hasReminderSet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                                RoundedCornerShape(8.dp)
+                            ),
+                        onClick = {
+                            if (hasReminderSet) {
+                                onReminderSelect(null) // Cancel reminder on tap
+                            } else {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    val hasPermission = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.POST_NOTIFICATIONS
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                    if (hasPermission) {
+                                        showDateTimePicker = true
+                                    } else {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                } else {
+                                    showDateTimePicker = true
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_alarm),
+                            contentDescription = if (hasReminderSet) "Cancel Reminder" else "Set Reminder",
+                            tint = if (hasReminderSet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                        )
+                    }
+
+                    // Privacy Icon
+                    IconButton(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .border(
+                                1.dp,
+                                if (draftState.isPrivate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                                RoundedCornerShape(8.dp)
+                            ),
+                        onClick = onPrivacyToggled
+                    ) {
+                        Icon(
+                            painter = painterResource(
+                                if (draftState.isPrivate) R.drawable.ic_visibility_off else R.drawable.ic_visibility
+                            ),
+                            contentDescription = "Toggle Private Note",
+                            tint = if (draftState.isPrivate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                        )
+                    }
+                }
+            }
+
+            // Active Status Pills Row (Visible only when Reminder is set or Privacy is on)
+            if (draftState.reminderTimestamp != null || draftState.isPrivate) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Reminder Active Pill
+                    draftState.reminderTimestamp?.let { reminderTime ->
+                        val formattedDate = remember(reminderTime) {
+                            SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()).format(
+                                Date(
+                                    reminderTime
+                                )
+                            )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .clickable { showDateTimePicker = true }
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .clickable { showDateTimePicker = true }
+                                    .clip(RoundedCornerShape(4.dp)),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_alarm),
+                                    contentDescription = "Edit Reminder",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = formattedDate,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            // Action: Cancel Reminder (✘)
+                            Icon(
+                                painter = painterResource(R.drawable.ic_close),
+                                contentDescription = "Cancel Reminder",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable { onReminderSelect(null) }
+                            )
+                        }
+                    }
+
+                    // Privacy Active Pill
+                    if (draftState.isPrivate) {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_lock),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Private Note",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            // Action: Cancel Privacy (✘)
+                            Icon(
+                                painter = painterResource(R.drawable.ic_close),
+                                contentDescription = "Turn off Privacy",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable { onPrivacyToggled() }
+                            )
+                        }
+                    }
                 }
             }
 
@@ -627,56 +796,6 @@ fun CreateEntryBottomSheet(
                         showDateTimePicker = false
                     }
                 )
-            }
-
-            draftState.reminderTimestamp?.let { reminderTime ->
-                val formattedDate = remember(reminderTime) {
-                    val sdf = SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault())
-                    sdf.format(Date(reminderTime))
-                }
-
-                //Reminder Pill
-                Row(
-                    modifier = Modifier
-                        .clickable { showDateTimePicker = true }
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Tapping the alarm icon or the date string triggers edit/reschedule
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable { showDateTimePicker = true },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        // Leading Alarm Icon
-                        Icon(
-                            painter = painterResource(R.drawable.ic_alarm),
-                            contentDescription = "Reminder",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        // Reminder Date-Time Text
-                        Text(
-                            text = formattedDate,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    // Action: Cancel Reminder (✘)
-                    Icon(
-                        painter = painterResource(R.drawable.ic_close),
-                        contentDescription = "Remove Reminder",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clickable { onReminderSelect(null) }
-                    )
-                }
             }
 
             draftState.capturedMediaPath?.let { path ->
@@ -869,40 +988,6 @@ fun CreateEntryBottomSheet(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                        }
-                    }
-                    // Reminder chip
-                    if (draftState.reminderTimestamp == null) {
-                        IconButton(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .border(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.onBackground,
-                                    RoundedCornerShape(8.dp)
-                                ),
-                            onClick = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    val hasPermission = ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.POST_NOTIFICATIONS
-                                    ) == PackageManager.PERMISSION_GRANTED
-
-                                    if (hasPermission) {
-                                        showDateTimePicker = true
-                                    } else {
-                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                    }
-                                } else {
-                                    showDateTimePicker = true
-                                }
-                            }
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_alarm),
-                                contentDescription = "Set Reminder",
-                                tint = MaterialTheme.colorScheme.onBackground
-                            )
                         }
                     }
                 }

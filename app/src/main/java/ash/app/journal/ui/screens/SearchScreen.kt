@@ -69,11 +69,15 @@ fun SearchScreen(
     onQueryChange: (String) -> Unit,
     selectedColorFilter: EntryColorTag?,
     selectedMediaFilter: EntryMediaType?,
+    onlyActiveRemindersFilter: Boolean,
+    onlyPrivateFilter: Boolean,
     filterCounts: SearchFilterCounts,
     searchResults: List<JournalEntry>,
     recentSearches: List<RecentSearchEntity>,
     onColorFilterSelected: (EntryColorTag?) -> Unit,
     onMediaFilterSelected: (EntryMediaType?) -> Unit,
+    onToggleActiveRemindersFilter: () -> Unit,
+    onTogglePrivateFilter: () -> Unit,
     onClearFilterChips: () -> Unit,
     onSearchExecuted: (String) -> Unit,
     onDeleteRecentSearch: (String) -> Unit,
@@ -88,7 +92,10 @@ fun SearchScreen(
 
     val squircleShape = RoundedCornerShape(8.dp)
 
-    val hasActiveFilters = selectedColorFilter != null || selectedMediaFilter != null
+    val hasActiveFilters = selectedColorFilter != null
+            || selectedMediaFilter != null
+            || onlyActiveRemindersFilter
+            || onlyPrivateFilter
 
     BackHandler(enabled = true) { onBackClick.invoke() }
 
@@ -382,6 +389,136 @@ fun SearchScreen(
                             }
                         }
                     }
+
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+
+                    // Row 3: Other Badges (Reminder)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Item 1: Active Reminders Toggle
+                        val remindersCount = filterCounts.activeRemindersCount
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (onlyActiveRemindersFilter) MaterialTheme.colorScheme.primary.copy(
+                                            alpha = 0.15f
+                                        )
+                                        else Color.Transparent
+                                    )
+                                    .clickable {
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
+                                        onToggleActiveRemindersFilter()
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(squircleShape)
+                                        .background(
+                                            if (onlyActiveRemindersFilter) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surface
+                                        )
+                                        .border(
+                                            width = if (onlyActiveRemindersFilter) 2.dp else 1.dp,
+                                            color = if (onlyActiveRemindersFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                            shape = squircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_alarm),
+                                        contentDescription = "Active Reminders",
+                                        modifier = Modifier.size(24.dp),
+                                        tint = if (onlyActiveRemindersFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+
+                                Text(
+                                    text = remindersCount.toString(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (onlyActiveRemindersFilter) FontWeight.Bold else FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.widthIn(min = 16.dp),
+                                )
+                            }
+                        }
+
+                        // Item 2: Private Entries Toggle
+                        val privateCount = filterCounts.privateEntriesCount
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (onlyPrivateFilter) MaterialTheme.colorScheme.primary.copy(
+                                            alpha = 0.15f
+                                        )
+                                        else Color.Transparent
+                                    )
+                                    .clickable {
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
+                                        onTogglePrivateFilter()
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(squircleShape)
+                                        .background(
+                                            if (onlyPrivateFilter) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surface
+                                        )
+                                        .border(
+                                            width = if (onlyPrivateFilter) 2.dp else 1.dp,
+                                            color = if (onlyPrivateFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                            shape = squircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_lock),
+                                        contentDescription = "Private Entries",
+                                        modifier = Modifier.size(24.dp),
+                                        tint = if (onlyPrivateFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+
+                                Text(
+                                    text = privateCount.toString(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (onlyPrivateFilter) FontWeight.Bold else FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.widthIn(min = 16.dp),
+                                )
+                            }
+                        }
+
+                        // Empty spacers to match the 5-item grid spacing of Rows 1 and 2
+                        Spacer(modifier = Modifier.weight(1f))
+                        Spacer(modifier = Modifier.weight(1f))
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
 
@@ -392,7 +529,7 @@ fun SearchScreen(
 
             // --- CONTENT: RECENT SEARCHES OR LIVE SEARCH RESULTS ---
             val isFilteringOrSearching =
-                query.isNotBlank() || selectedColorFilter != null || selectedMediaFilter != null
+                query.isNotBlank() || hasActiveFilters
 
             if (!isFilteringOrSearching) {
                 // Recent Searches Section

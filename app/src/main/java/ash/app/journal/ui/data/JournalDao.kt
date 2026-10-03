@@ -53,13 +53,26 @@ interface JournalDao {
         """
         SELECT * FROM journal_entries 
         WHERE (
-            title LIKE '%' || :query || '%' 
+            :query IS NULL OR :query = ''
+            OR title LIKE '%' || :query || '%' 
             OR details LIKE '%' || :query || '%'
             OR title LIKE '%' || :trimmedQuery || '%' 
             OR details LIKE '%' || :trimmedQuery || '%'
         )
         AND (:colorTag IS NULL OR colorTag = :colorTag)
         AND (:mediaType IS NULL OR mediaType = :mediaType)
+        AND (
+          :onlyActiveReminders = 0 
+          OR (
+            isReminderCompleted = 0
+            AND reminderTimestamp IS NOT NULL
+            AND reminderTimestamp > :currentTime
+          )
+        )
+        AND (
+            :onlyPrivate = 0 
+            OR isPrivateEntry = 1
+        )
         ORDER BY timestamp DESC
     """
     )
@@ -67,31 +80,85 @@ interface JournalDao {
         query: String,
         trimmedQuery: String,
         colorTag: EntryColorTag? = null,
-        mediaType: EntryMediaType? = null
+        mediaType: EntryMediaType? = null,
+        onlyActiveReminders: Boolean,
+        onlyPrivate: Boolean,
+        currentTime: Long = System.currentTimeMillis(),
     ): Flow<List<JournalEntry>>
 
     // --- Cross-Filtered Dynamic Counts ---
-    // Color tag counts filtered by active media type (if selected)
+    // Row-1: Color tag counts
     @Query(
         """
         SELECT colorTag, COUNT(*) as count 
-        FROM journal_entries 
+        FROM journal_entries
         WHERE (:mediaType IS NULL OR mediaType = :mediaType)
+          AND (:onlyActiveReminders = 0 OR (isReminderCompleted = 0 AND reminderTimestamp IS NOT NULL AND reminderTimestamp > :currentTime))
+          AND (:onlyPrivate = 0 OR isPrivateEntry = 1)
         GROUP BY colorTag
     """
     )
-    fun getColorTagCounts(mediaType: EntryMediaType? = null): Flow<List<ColorTagCount>>
+    fun getFacetedColorTagCounts(
+        mediaType: EntryMediaType? = null,
+        onlyActiveReminders: Boolean,
+        onlyPrivate: Boolean,
+        currentTime: Long = System.currentTimeMillis()
+    ): Flow<List<ColorTagCount>>
 
-    // Media type counts filtered by active color tag (if selected)
+    // Row-2: Media type counts
     @Query(
         """
         SELECT mediaType, COUNT(*) as count 
-        FROM journal_entries 
+        FROM journal_entries
         WHERE (:colorTag IS NULL OR colorTag = :colorTag)
+          AND (:onlyActiveReminders = 0 OR (isReminderCompleted = 0 AND reminderTimestamp IS NOT NULL AND reminderTimestamp > :currentTime))
+          AND (:onlyPrivate = 0 OR isPrivateEntry = 1)
         GROUP BY mediaType
     """
     )
-    fun getMediaTypeCounts(colorTag: EntryColorTag? = null): Flow<List<MediaTypeCount>>
+    fun getFacetedMediaTypeCounts(
+        colorTag: EntryColorTag? = null,
+        onlyActiveReminders: Boolean,
+        onlyPrivate: Boolean,
+        currentTime: Long = System.currentTimeMillis()
+    ): Flow<List<MediaTypeCount>>
+
+    // Row-3: Active Reminders and Private Notes count
+    @Query(
+        """
+        SELECT COUNT(*) 
+        FROM journal_entries
+        WHERE isReminderCompleted = 0 
+          AND reminderTimestamp IS NOT NULL 
+          AND reminderTimestamp > :currentTime
+          AND (:colorTag IS NULL OR colorTag = :colorTag)
+          AND (:mediaType IS NULL OR mediaType = :mediaType)
+          AND (:onlyPrivate = 0 OR isPrivateEntry = 1)
+    """
+    )
+    fun getFacetedActiveRemindersCount(
+        colorTag: EntryColorTag?,
+        mediaType: EntryMediaType?,
+        onlyPrivate: Boolean,
+        currentTime: Long = System.currentTimeMillis()
+    ): Flow<Int>
+
+    @Query(
+        """
+        SELECT COUNT(*) 
+        FROM journal_entries
+        WHERE isPrivateEntry = 1
+          AND (:colorTag IS NULL OR colorTag = :colorTag)
+          AND (:mediaType IS NULL OR mediaType = :mediaType)
+          AND (:onlyActiveReminders = 0 OR (isReminderCompleted = 0 AND reminderTimestamp IS NOT NULL AND reminderTimestamp > :currentTime))
+    """
+    )
+    fun getFacetedPrivateEntriesCount(
+        colorTag: EntryColorTag?,
+        mediaType: EntryMediaType?,
+        onlyActiveReminders: Boolean,
+        currentTime: Long = System.currentTimeMillis()
+    ): Flow<Int>
 
     // --- Recent Searches ---
     @Query("SELECT * FROM recent_searches ORDER BY timestamp DESC LIMIT 15")

@@ -52,3 +52,9 @@
 - "Remind Again" bar in entries whose reminder expired
 - Upgrade AGP plugin to 9.4.1
 - Upgrade other library versions
+- Private entry field in `JournalEntry` and `JournalDraftState`
+- Updated dbVersion to 8
+- DbMigration 7 to 8, for Private entry field
+- UI/UX update for Reminder and Privacy icon buttons in `CreateEntryBottomSheet`
+- Active Reminders and Private Note chips in Search screen with updated filter count logic
+- Updated `JournalDao`, `JournalRepository`, `JournalRepositoryImpl`

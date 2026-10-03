@@ -10,4 +10,5 @@ data class JournalDraftState(
     val capturedMediaType: EntryMediaType = EntryMediaType.TEXT,
     val autoTitlePlaceholder: String = "",
     val reminderTimestamp: Long? = null,
+    val isPrivate: Boolean = false,
 )

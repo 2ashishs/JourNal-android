@@ -49,16 +49,58 @@ class JournalRepositoryImpl(
     override fun searchEntries(
         query: String,
         colorTag: EntryColorTag?,
-        mediaType: EntryMediaType?
-    ): Flow<List<JournalEntry>> = journalDao.searchEntries(query, query.trim(), colorTag, mediaType)
+        mediaType: EntryMediaType?,
+        onlyActiveReminders: Boolean,
+        onlyPrivate: Boolean,
+        currentTime: Long,
+    ): Flow<List<JournalEntry>> = journalDao.searchEntries(
+        query,
+        query.trim(),
+        colorTag,
+        mediaType,
+        onlyActiveReminders,
+        onlyPrivate,
+        currentTime
+    )
 
-    override fun getColorTagCounts(mediaType: EntryMediaType?): Flow<List<ColorTagCount>> =
-        journalDao.getColorTagCounts(mediaType)
+    override fun getFacetedColorTagCounts(
+        mediaType: EntryMediaType?,
+        onlyActiveReminders: Boolean,
+        onlyPrivate: Boolean,
+        currentTime: Long
+    ): Flow<List<ColorTagCount>> = journalDao.getFacetedColorTagCounts(
+        mediaType, onlyActiveReminders, onlyPrivate, currentTime
+    )
 
-    override fun getMediaTypeCounts(colorTag: EntryColorTag?): Flow<List<MediaTypeCount>> =
-        journalDao.getMediaTypeCounts(colorTag)
+    override fun getFacetedMediaTypeCounts(
+        colorTag: EntryColorTag?,
+        onlyActiveReminders: Boolean,
+        onlyPrivate: Boolean,
+        currentTime: Long
+    ): Flow<List<MediaTypeCount>> = journalDao.getFacetedMediaTypeCounts(
+        colorTag, onlyActiveReminders, onlyPrivate, currentTime
+    )
 
-    override fun getRecentSearches(): Flow<List<RecentSearchEntity>> = journalDao.getRecentSearches()
+    override fun getFacetedActiveRemindersCount(
+        colorTag: EntryColorTag?,
+        mediaType: EntryMediaType?,
+        onlyPrivate: Boolean,
+        currentTime: Long
+    ): Flow<Int> = journalDao.getFacetedActiveRemindersCount(
+        colorTag, mediaType, onlyPrivate, currentTime
+    )
+
+    override fun getFacetedPrivateEntriesCount(
+        colorTag: EntryColorTag?,
+        mediaType: EntryMediaType?,
+        onlyActiveReminders: Boolean,
+        currentTime: Long
+    ): Flow<Int> = journalDao.getFacetedPrivateEntriesCount(
+        colorTag, mediaType, onlyActiveReminders, currentTime
+    )
+
+    override fun getRecentSearches(): Flow<List<RecentSearchEntity>> =
+        journalDao.getRecentSearches()
 
     override suspend fun saveRecentSearch(query: String) {
         if (query.isNotBlank()) {

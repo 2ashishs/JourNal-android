@@ -268,6 +268,10 @@ class JournalViewModel(
         }
     }
 
+    fun onPrivacyToggled() {
+        _draftState.update { it.copy(isPrivate = !it.isPrivate) }
+    }
+
     // --- Database Actions ---
 
     fun saveCurrentEntry(context: Context) {
@@ -316,6 +320,7 @@ class JournalViewModel(
                     timestamp = System.currentTimeMillis(),
                     reminderTimestamp = currentDraft.reminderTimestamp,
                     isReminderCompleted = false,
+                    isPrivateEntry = currentDraft.isPrivate,
                 )
                 repository.insertEntry(updatedEntry)
             } else {
@@ -329,6 +334,7 @@ class JournalViewModel(
                     timestamp = System.currentTimeMillis(),
                     reminderTimestamp = currentDraft.reminderTimestamp,
                     isReminderCompleted = false,
+                    isPrivateEntry = currentDraft.isPrivate,
                 )
                 repository.insertEntry(newEntry)
             }
@@ -378,6 +384,7 @@ class JournalViewModel(
                 capturedMediaPath = if (isMediaFileAvailable(entry)) entry.mediaPath else null,
                 capturedMediaType = if (isMediaFileAvailable(entry)) entry.mediaType else EntryMediaType.TEXT,
                 reminderTimestamp = activeReminder,
+                isPrivate = entry.isPrivateEntry,
             )
         }
     }
@@ -451,16 +458,45 @@ class JournalViewModel(
     private val _selectedMediaFilter = MutableStateFlow<EntryMediaType?>(null)
     val selectedMediaFilter: StateFlow<EntryMediaType?> = _selectedMediaFilter.asStateFlow()
 
+    private val _onlyActiveRemindersFilter = MutableStateFlow(false)
+    val onlyActiveRemindersFilter: StateFlow<Boolean> = _onlyActiveRemindersFilter.asStateFlow()
+    fun toggleActiveRemindersFilter() {
+        _onlyActiveRemindersFilter.update { !it }
+    }
+
+    private val _onlyPrivateFilter = MutableStateFlow(false)
+    val onlyPrivateFilter: StateFlow<Boolean> = _onlyPrivateFilter.asStateFlow()
+    fun togglePrivateFilter() {
+        _onlyPrivateFilter.update { !it }
+    }
+
+    private data class FilterParams(
+        val query: String,
+        val colorTag: EntryColorTag?,
+        val mediaType: EntryMediaType?,
+        val onlyActiveReminders: Boolean,
+        val onlyPrivate: Boolean
+    )
+
     // --- Reactive Search Results ---
     @OptIn(ExperimentalCoroutinesApi::class)
     val searchResults: StateFlow<List<JournalEntry>> = combine(
         _searchQuery,
         _selectedColorFilter,
-        _selectedMediaFilter
-    ) { query, color, media ->
-        Triple(query, color, media)
-    }.flatMapLatest { (query, color, media) ->
-        repository.searchEntries(query = query, colorTag = color, mediaType = media)
+        _selectedMediaFilter,
+        _onlyActiveRemindersFilter,
+        _onlyPrivateFilter,
+    ) { query, color, media, onlyReminders, onlyPrivate ->
+        FilterParams(query, color, media, onlyReminders, onlyPrivate)
+    }.flatMapLatest { (query, color, media, onlyReminders, onlyPrivate) ->
+        repository.searchEntries(
+            query = query,
+            colorTag = color,
+            mediaType = media,
+            onlyActiveReminders = onlyReminders,
+            onlyPrivate = onlyPrivate,
+            currentTime = System.currentTimeMillis(),
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -470,21 +506,37 @@ class JournalViewModel(
     // Dynamic Filter Counts that automatically re-aggregate when a filter is selected
     @OptIn(ExperimentalCoroutinesApi::class)
     val filterCounts: StateFlow<SearchFilterCounts> = combine(
-        _selectedMediaFilter.flatMapLatest { selectedMedia ->
-            repository.getColorTagCounts(selectedMedia)
-        },
-        _selectedColorFilter.flatMapLatest { selectedColor ->
-            repository.getMediaTypeCounts(selectedColor)
+        _selectedColorFilter,
+        _selectedMediaFilter,
+        _onlyActiveRemindersFilter,
+        _onlyPrivateFilter
+    ) { color, media, reminders, privateOnly ->
+        FacetedFilterContext(color, media, reminders, privateOnly)
+    }.flatMapLatest { ctx ->
+        combine(
+            repository.getFacetedColorTagCounts(ctx.media, ctx.reminders, ctx.privateOnly),
+            repository.getFacetedMediaTypeCounts(ctx.color, ctx.reminders, ctx.privateOnly),
+            repository.getFacetedActiveRemindersCount(ctx.color, ctx.media, ctx.privateOnly),
+            repository.getFacetedPrivateEntriesCount(ctx.color, ctx.media, ctx.reminders)
+        ) { colorList, mediaList, remindersCount, privateCount ->
+            SearchFilterCounts(
+                colorCounts = colorList.associate { it.colorTag to it.count },
+                mediaCounts = mediaList.associate { it.mediaType to it.count },
+                activeRemindersCount = remindersCount,
+                privateEntriesCount = privateCount
+            )
         }
-    ) { colorList, mediaList ->
-        SearchFilterCounts(
-            colorCounts = colorList.associate { it.colorTag to it.count },
-            mediaCounts = mediaList.associate { it.mediaType to it.count }
-        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = SearchFilterCounts()
+    )
+
+    private data class FacetedFilterContext(
+        val color: EntryColorTag?,
+        val media: EntryMediaType?,
+        val reminders: Boolean,
+        val privateOnly: Boolean
     )
 
     // --- Recent Searches History ---
@@ -514,12 +566,16 @@ class JournalViewModel(
     fun clearFilters() {
         _selectedColorFilter.value = null
         _selectedMediaFilter.value = null
+        _onlyActiveRemindersFilter.value = false
+        _onlyPrivateFilter.value = false
         _searchQuery.value = ""
     }
 
     fun clearFilterChips() {
         _selectedColorFilter.value = null
         _selectedMediaFilter.value = null
+        _onlyActiveRemindersFilter.value = false
+        _onlyPrivateFilter.value = false
     }
 
     fun saveRecentSearch(query: String) {

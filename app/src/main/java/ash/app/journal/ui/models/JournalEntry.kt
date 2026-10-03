@@ -18,6 +18,7 @@ data class JournalEntry(
     val timestamp: Long = System.currentTimeMillis(),
     val reminderTimestamp: Long? = null,
     val isReminderCompleted: Boolean = false,
+    val isPrivateEntry: Boolean = false,
 )
 
 val JournalEntry.hasActiveReminder: Boolean

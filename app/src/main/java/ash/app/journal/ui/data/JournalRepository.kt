@@ -22,11 +22,40 @@ interface JournalRepository {
     fun searchEntries(
         query: String,
         colorTag: EntryColorTag? = null,
-        mediaType: EntryMediaType? = null
+        mediaType: EntryMediaType? = null,
+        onlyActiveReminders: Boolean = false,
+        onlyPrivate: Boolean = false,
+        currentTime: Long = System.currentTimeMillis(),
     ): Flow<List<JournalEntry>>
+
     // Dynamic Count Aggregations for Filter Chips
-    fun getColorTagCounts(mediaType: EntryMediaType? = null): Flow<List<ColorTagCount>>
-    fun getMediaTypeCounts(colorTag: EntryColorTag? = null): Flow<List<MediaTypeCount>>
+    fun getFacetedColorTagCounts(
+        mediaType: EntryMediaType? = null,
+        onlyActiveReminders: Boolean,
+        onlyPrivate: Boolean,
+        currentTime: Long = System.currentTimeMillis()
+    ): Flow<List<ColorTagCount>>
+
+    fun getFacetedMediaTypeCounts(
+        colorTag: EntryColorTag? = null,
+        onlyActiveReminders: Boolean,
+        onlyPrivate: Boolean,
+        currentTime: Long = System.currentTimeMillis()
+    ): Flow<List<MediaTypeCount>>
+
+    fun getFacetedActiveRemindersCount(
+        colorTag: EntryColorTag?,
+        mediaType: EntryMediaType?,
+        onlyPrivate: Boolean,
+        currentTime: Long = System.currentTimeMillis()
+    ): Flow<Int>
+
+    fun getFacetedPrivateEntriesCount(
+        colorTag: EntryColorTag?,
+        mediaType: EntryMediaType?,
+        onlyActiveReminders: Boolean,
+        currentTime: Long = System.currentTimeMillis()
+    ): Flow<Int>
     // Recent Searches Queries
     fun getRecentSearches(): Flow<List<RecentSearchEntity>>
     suspend fun saveRecentSearch(query: String)
