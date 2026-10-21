@@ -2,6 +2,7 @@ package ash.app.journal
 
 import android.app.Application
 import androidx.room.Room
+import ash.app.journal.settings.SettingsDataStore
 import ash.app.journal.ui.data.JournalDatabase
 import ash.app.journal.ui.data.JournalRepository
 import ash.app.journal.ui.data.JournalRepositoryImpl
@@ -36,21 +37,26 @@ class JournalApplication : Application() {
             .build()
     }
 
-    // 1. Core Database Repository
+    // Core Database Repository
     val repository: JournalRepository by lazy {
         JournalRepositoryImpl(database.journalDao())
     }
 
-    // 2. Shared Network Engine Client
+    // Shared Network Engine Client
     val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .retryOnConnectionFailure(true)
             .build()
     }
 
-    // 3. Link Preview Repository Instance
+    // Link Preview Repository Instance
     val linkMetadataRepository: LinkMetadataRepository by lazy {
         LinkMetadataRepository(okHttpClient, linkMetadataDao = database.linkMetadataDao())
+    }
+
+    // Settings Data Store
+    val settingsDataStore: SettingsDataStore by lazy {
+        SettingsDataStore(this)
     }
 
 }

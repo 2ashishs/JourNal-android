@@ -17,6 +17,7 @@ splashscreenVersion = "1.2.0"
 media3Version = "1.11.1"
 okHttpVersion = "5.5.0"
 jsoupVersion = "1.23.2"
+datastoreVersion="1.2.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,6 +47,7 @@ coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref 
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coilVersion" }
 square-okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okHttpVersion" }
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoupVersion" }
+datastore-preferences={ group = "androidx.datastore", name="datastore-preferences", version.ref="datastoreVersion"}
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

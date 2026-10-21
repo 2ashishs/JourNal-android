@@ -18,6 +18,7 @@ import ash.app.journal.notifications.ReminderBroadcastReceiver
 import ash.app.journal.ui.JournalViewModel
 import ash.app.journal.ui.models.EntryMediaType
 import ash.app.journal.ui.screens.MainJournalScreen
+import ash.app.journal.ui.settings.SettingsViewModel
 import ash.app.journal.ui.theme.JourNaLTheme
 import java.io.File
 import java.io.FileOutputStream
@@ -25,6 +26,7 @@ import java.io.FileOutputStream
 class MainActivity : ComponentActivity() {
 
     lateinit var viewModel: JournalViewModel
+    lateinit var settingsViewModel: SettingsViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen().setOnExitAnimationListener { splashScreenView ->
@@ -61,23 +63,37 @@ class MainActivity : ComponentActivity() {
         val appContainer = application as JournalApplication
         val repository = appContainer.repository
         val linkRepository = appContainer.linkMetadataRepository
+        val settingsDataStore = appContainer.settingsDataStore
 
         // Factory container pattern to instantiate Custom ViewModel Parameter signatures cleanly
         val viewModelFactory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return JournalViewModel(repository, linkRepository) as T
+                return when {
+                    modelClass.isAssignableFrom(JournalViewModel::class.java) -> {
+                        JournalViewModel(repository, linkRepository) as T
+                    }
+                    modelClass.isAssignableFrom(SettingsViewModel::class.java) -> {
+                        SettingsViewModel(settingsDataStore) as T
+                    }
+                    else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+                }
             }
         }
 
-        viewModel = ViewModelProvider(this, viewModelFactory)[JournalViewModel::class.java]
+        val provider = ViewModelProvider(this, viewModelFactory)
+        viewModel = provider[JournalViewModel::class.java]
+        settingsViewModel = provider[SettingsViewModel::class.java]
 
         // Handle incoming intent data stream
         handleIncomingIntent(intent)
 
         setContent {
             JourNaLTheme {
-                MainJournalScreen(viewModel = viewModel)
+                MainJournalScreen(
+                    viewModel = viewModel,
+                    settingsViewModel = settingsViewModel,
+                )
             }
         }
     }

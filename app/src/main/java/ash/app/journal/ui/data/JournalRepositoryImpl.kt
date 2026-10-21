@@ -12,8 +12,8 @@ class JournalRepositoryImpl(
     private val journalDao: JournalDao
 ) : JournalRepository {
 
-    override fun getAllEntries(): Flow<List<JournalEntry>> {
-        return journalDao.getAllEntries()
+    override fun getAllEntries(isVaultUnlocked: Boolean): Flow<List<JournalEntry>> {
+        return journalDao.getAllEntries(isVaultUnlocked)
     }
 
     override suspend fun insertEntry(entry: JournalEntry): Long {

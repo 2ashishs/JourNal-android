@@ -104,6 +104,7 @@ import ash.app.journal.ui.models.RemindAgainCadence
 import ash.app.journal.ui.models.canRemindAgain
 import ash.app.journal.ui.models.formattedReminderText
 import ash.app.journal.ui.models.hasActiveReminder
+import ash.app.journal.ui.settings.SettingsViewModel
 import ash.app.journal.ui.theme.JournalTheme
 import coil3.compose.rememberAsyncImagePainter
 import java.io.File
@@ -113,7 +114,10 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainJournalScreen(viewModel: JournalViewModel) {
+fun MainJournalScreen(
+    viewModel: JournalViewModel,
+    settingsViewModel: SettingsViewModel,
+) {
     val entries by viewModel.journalEntries.collectAsState()
     val draftState by viewModel.draftState.collectAsState()
 
@@ -128,11 +132,54 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
     val onlyActiveRemindersFilter by viewModel.onlyActiveRemindersFilter.collectAsState()
     val onlyPrivateFilter by viewModel.onlyPrivateFilter.collectAsState()
 
+    var isSettingsOpen by remember { mutableStateOf(false) }
+
+    val isVaultUnlocked by viewModel.isVaultUnlocked.collectAsState()
+    val isPinSet by settingsViewModel.isPinSet.collectAsState()
+
+    var showUnlockPinDialog by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("JourNaL", fontWeight = FontWeight.Bold) },
                 actions = {
+                    // 1. Lock Icon (Vault toggle)
+                    IconButton(
+                        onClick = {
+                            if (isVaultUnlocked) {
+                                // Already unlocked -> instantly lock & hide private entries
+                                viewModel.lockVault()
+                            } else {
+                                if (isPinSet) {
+                                    // PIN exists -> request PIN verification
+                                    showUnlockPinDialog = true
+                                } else {
+                                    // No PIN configured yet -> unlock directly or prompt settings
+                                    viewModel.unlockVault()
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            painter = painterResource(
+                                if (isVaultUnlocked) R.drawable.ic_lock_open else R.drawable.ic_lock
+                            ),
+                            tint = if (isVaultUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            contentDescription = if (isVaultUnlocked) "Lock Private Notes" else "Unlock Private Notes"
+                        )
+                    }
+
+                    // 2. Settings Icon
+                    IconButton(onClick = { isSettingsOpen = true }) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_settings),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            contentDescription = "Settings"
+                        )
+                    }
+
+                    // 3. Search Icon
                     IconButton(onClick = { isSearchScreenOpen = true }) {
                         Icon(
                             painter = painterResource(R.drawable.ic_search),
@@ -308,6 +355,26 @@ fun MainJournalScreen(viewModel: JournalViewModel) {
                 viewModel.clearFilters()
                 isSearchScreenOpen = false
             },
+        )
+    }
+
+    // Setting Screen
+    if (isSettingsOpen) {
+        SettingsScreen(
+            viewModel = settingsViewModel,
+            onBackClick = { isSettingsOpen = false }
+        )
+    }
+
+    // PIN Dialog instance
+    if (showUnlockPinDialog) {
+        VaultPinUnlockDialog(
+            onVerifyPin = { pin -> settingsViewModel.verifyPin(pin) },
+            onSuccess = {
+                showUnlockPinDialog = false
+                viewModel.unlockVault()
+            },
+            onDismiss = { showUnlockPinDialog = false }
         )
     }
 }

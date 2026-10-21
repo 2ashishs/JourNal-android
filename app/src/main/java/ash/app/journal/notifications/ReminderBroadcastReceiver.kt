@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
+import ash.app.journal.settings.SnoozeDuration
 
 class ReminderBroadcastReceiver : BroadcastReceiver() {
 
@@ -40,13 +41,12 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
         if (action == ACTION_SNOOZE) {
             notificationManager.cancel(notificationId)
 
-            val snoozeDuration = 60 * 60 * 1000L
-            val newReminderTime = System.currentTimeMillis() + snoozeDuration
-
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val app = context.applicationContext as JournalApplication
+                    val snoozeDuration = app.settingsDataStore.getSnoozeDurationMillis()
+                    val newReminderTime = System.currentTimeMillis() + snoozeDuration
                     val entry = app.repository.getEntryById(entryId)
                     if (entry != null) {
                         app.repository.updateEntry(
@@ -72,17 +72,18 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
         }
 
         // --- BRANCH 2: SHOW NOTIFICATION ---
-        createNotificationChannel(
-            notificationManager,
-            soundUri
-        ) // pass `context` to extract text from `strings.xml`
+
+        createNotificationChannel(notificationManager, soundUri)
 
         // Update Room so the UI elements instantly drop the reminder pill when reminder completed
         val pendingResult = goAsync()
+        var snoozeLabel = "1h"
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val app = context.applicationContext as JournalApplication
                 app.repository.markReminderCompleted(entryId)
+                val snoozeMillis = app.settingsDataStore.getSnoozeDurationMillis()
+                snoozeLabel = SnoozeDuration.fromMillis(snoozeMillis).label
             } finally {
                 pendingResult.finish()
             }
@@ -125,7 +126,7 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
             .setSound(soundUri) // Legacy fallback for API < 26
             .setAutoCancel(true)
             .setContentIntent(pendingTapIntent)
-            .addAction(R.drawable.ic_alarm, "Snooze (1h)", pendingSnoozeIntent) // Snooze button
+            .addAction(R.drawable.ic_alarm, "Snooze ($snoozeLabel)", pendingSnoozeIntent) // Snooze button
             .build()
 
         notificationManager.notify(notificationId, notification)

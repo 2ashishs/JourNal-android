@@ -58,3 +58,11 @@
 - UI/UX update for Reminder and Privacy icon buttons in `CreateEntryBottomSheet`
 - Active Reminders and Private Note chips in Search screen with updated filter count logic
 - Updated `JournalDao`, `JournalRepository`, `JournalRepositoryImpl`
+- Added AndroidX DataStore Preferences library
+- Added `SettingsScreen` icon to `HomeScreen`
+- `SettingsDataStore` initialized in `Application` class
+- Retrieving all entries from DB honors `isVaultUnlocked` value from data store
+- `SettingsViewModel` initialized in `MainActivity` and passed to `MainJournalScreen`
+- Customize snooze timer duration for reminder notifications on `SettingsScreen` using `SettingsDataStore`
+- Ability to set and reset PIN in `SettingsScreen` to view/hide private entries
+- `SettingsViewModel` handles settings for snooze duration and set/remove PIN for private entries

@@ -44,7 +44,22 @@ class JournalViewModel(
 ) : ViewModel() {
 
     // 1. STREAM FROM DB: Automatically reads from Room and converts it into a StateFlow for Compose
-    val journalEntries: StateFlow<List<JournalEntry>> = repository.getAllEntries()
+    private val _isVaultUnlocked = MutableStateFlow(false)
+    val isVaultUnlocked: StateFlow<Boolean> = _isVaultUnlocked.asStateFlow()
+
+    fun lockVault() {
+        _isVaultUnlocked.value = false
+    }
+
+    fun unlockVault() {
+        _isVaultUnlocked.value = true
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val journalEntries: StateFlow<List<JournalEntry>> = _isVaultUnlocked
+        .flatMapLatest { unlocked ->
+            repository.getAllEntries(isVaultUnlocked = unlocked)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

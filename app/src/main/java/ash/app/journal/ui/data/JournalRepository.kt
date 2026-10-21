@@ -9,7 +9,7 @@ import ash.app.journal.ui.models.RecentSearchEntity
 import kotlinx.coroutines.flow.Flow
 
 interface JournalRepository {
-    fun getAllEntries(): Flow<List<JournalEntry>>
+    fun getAllEntries(isVaultUnlocked: Boolean): Flow<List<JournalEntry>>
     suspend fun insertEntry(entry: JournalEntry): Long
     suspend fun deleteEntry(entry: JournalEntry)
     suspend fun updateEntry(entry: JournalEntry)
